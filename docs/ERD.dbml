@@ -1,0 +1,46 @@
+Table users {
+  id bigint [pk]
+  name varchar
+  email varchar
+  password varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table categories {
+  id bigint [pk]
+  name varchar
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table targets {
+  id bigint [pk]
+  user_id bigint
+  category_id bigint
+  name varchar
+  target_type varchar
+  memo text
+  created_at timestamp
+  updated_at timestamp
+}
+
+Table schedules {
+  id bigint [pk]
+  user_id bigint
+  target_id bigint [null]
+  title varchar
+  schedule_type varchar
+  starts_at timestamp
+  ends_at timestamp [null]
+  location varchar [null]
+  url varchar [null]
+  memo text
+  created_at timestamp
+  updated_at timestamp
+}
+
+Ref: targets.user_id > users.id
+Ref: targets.category_id > categories.id
+Ref: schedules.user_id > users.id
+Ref: schedules.target_id > targets.id
