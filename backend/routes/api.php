@@ -13,3 +13,6 @@ Route::get('/categories', [CategoryController::class, 'index']);
 
 Route::get('/targets', [TargetController::class, 'index'])
     ->middleware('auth:sanctum');
+
+Route::post('/targets', [TargetController::class, 'store'])
+    ->middleware('auth:sanctum');
