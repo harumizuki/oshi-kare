@@ -16,3 +16,6 @@ Route::get('/targets', [TargetController::class, 'index'])
 
 Route::post('/targets', [TargetController::class, 'store'])
     ->middleware('auth:sanctum');
+
+Route::get('/targets/{target}', [TargetController::class, 'show'])
+    ->middleware('auth:sanctum');

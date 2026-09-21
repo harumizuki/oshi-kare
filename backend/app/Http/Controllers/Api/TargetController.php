@@ -6,8 +6,10 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexTargetRequest;
 use App\Http\Requests\StoreTargetRequest;
 use App\Http\Resources\TargetResource;
+use App\Models\Target;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
 
 class TargetController extends Controller
@@ -39,5 +41,14 @@ class TargetController extends Controller
         return (new TargetResource($target))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    public function show(Target $target): TargetResource
+    {
+        Gate::authorize('view', $target);
+
+        $target->load('category');
+
+        return new TargetResource($target);
     }
 }
