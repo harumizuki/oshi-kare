@@ -19,3 +19,6 @@ Route::post('/targets', [TargetController::class, 'store'])
 
 Route::get('/targets/{target}', [TargetController::class, 'show'])
     ->middleware('auth:sanctum');
+
+Route::patch('/targets/{target}', [TargetController::class, 'update'])
+    ->middleware('auth:sanctum');

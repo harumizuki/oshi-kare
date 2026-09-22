@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexTargetRequest;
 use App\Http\Requests\StoreTargetRequest;
+use App\Http\Requests\UpdateTargetRequest;
 use App\Http\Resources\TargetResource;
 use App\Models\Target;
 use Illuminate\Http\JsonResponse;
@@ -47,6 +48,16 @@ class TargetController extends Controller
     {
         Gate::authorize('view', $target);
 
+        $target->load('category');
+
+        return new TargetResource($target);
+    }
+
+    public function update(UpdateTargetRequest $request, Target $target): TargetResource
+    {
+        Gate::authorize('update', $target);
+
+        $target->update($request->validated());
         $target->load('category');
 
         return new TargetResource($target);

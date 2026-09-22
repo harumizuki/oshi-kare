@@ -11,4 +11,9 @@ class TargetPolicy
     {
         return $user->id === $target->user_id;
     }
+
+    public function update(User $user, Target $target): bool
+    {
+        return $user->id === $target->user_id;
+    }
 }
