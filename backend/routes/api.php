@@ -22,3 +22,6 @@ Route::get('/targets/{target}', [TargetController::class, 'show'])
 
 Route::patch('/targets/{target}', [TargetController::class, 'update'])
     ->middleware('auth:sanctum');
+
+Route::delete('/targets/{target}', [TargetController::class, 'destroy'])
+    ->middleware('auth:sanctum');

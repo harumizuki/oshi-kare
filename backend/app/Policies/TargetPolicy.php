@@ -16,4 +16,9 @@ class TargetPolicy
     {
         return $user->id === $target->user_id;
     }
+
+    public function delete(User $user, Target $target): bool
+    {
+        return $user->id === $target->user_id;
+    }
 }

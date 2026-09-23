@@ -62,4 +62,13 @@ class TargetController extends Controller
 
         return new TargetResource($target);
     }
+
+    public function destroy(Target $target): Response
+    {
+        Gate::authorize('delete', $target);
+
+        $target->delete();
+
+        return response()->noContent();
+    }
 }
