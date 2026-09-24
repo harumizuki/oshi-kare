@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Api\CategoryController;
+use App\Http\Controllers\Api\ScheduleController;
 use App\Http\Controllers\Api\TargetController;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
@@ -24,4 +25,7 @@ Route::patch('/targets/{target}', [TargetController::class, 'update'])
     ->middleware('auth:sanctum');
 
 Route::delete('/targets/{target}', [TargetController::class, 'destroy'])
+    ->middleware('auth:sanctum');
+
+Route::post('/schedules', [ScheduleController::class, 'store'])
     ->middleware('auth:sanctum');
