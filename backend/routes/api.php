@@ -29,3 +29,6 @@ Route::delete('/targets/{target}', [TargetController::class, 'destroy'])
 
 Route::post('/schedules', [ScheduleController::class, 'store'])
     ->middleware('auth:sanctum');
+
+Route::get('/schedules', [ScheduleController::class, 'index'])
+    ->middleware('auth:sanctum');
