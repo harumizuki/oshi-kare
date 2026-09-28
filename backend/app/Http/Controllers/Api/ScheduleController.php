@@ -6,10 +6,12 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexScheduleRequest;
 use App\Http\Requests\StoreScheduleRequest;
 use App\Http\Resources\ScheduleResource;
+use App\Models\Schedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
 
 class ScheduleController extends Controller
@@ -87,5 +89,14 @@ class ScheduleController extends Controller
         return (new ScheduleResource($schedule))
             ->response()
             ->setStatusCode(Response::HTTP_CREATED);
+    }
+
+    public function show(Schedule $schedule): ScheduleResource
+    {
+        Gate::authorize('view', $schedule);
+
+        $schedule->load('target');
+
+        return new ScheduleResource($schedule);
     }
 }

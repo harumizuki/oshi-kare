@@ -32,3 +32,6 @@ Route::post('/schedules', [ScheduleController::class, 'store'])
 
 Route::get('/schedules', [ScheduleController::class, 'index'])
     ->middleware('auth:sanctum');
+
+Route::get('/schedules/{schedule}', [ScheduleController::class, 'show'])
+    ->middleware('auth:sanctum');
