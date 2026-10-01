@@ -122,4 +122,13 @@ class ScheduleController extends Controller
 
         return new ScheduleResource($schedule);
     }
+
+    public function destroy(Schedule $schedule): Response
+    {
+        Gate::authorize('delete', $schedule);
+
+        $schedule->delete();
+
+        return response()->noContent();
+    }
 }

@@ -16,4 +16,9 @@ class SchedulePolicy
     {
         return $user->id === $schedule->user_id;
     }
+
+    public function delete(User $user, Schedule $schedule): bool
+    {
+        return $user->id === $schedule->user_id;
+    }
 }

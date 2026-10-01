@@ -38,3 +38,6 @@ Route::get('/schedules/{schedule}', [ScheduleController::class, 'show'])
 
 Route::patch('/schedules/{schedule}', [ScheduleController::class, 'update'])
     ->middleware('auth:sanctum');
+
+Route::delete('/schedules/{schedule}', [ScheduleController::class, 'destroy'])
+    ->middleware('auth:sanctum');
