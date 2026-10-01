@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Api;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexScheduleRequest;
 use App\Http\Requests\StoreScheduleRequest;
+use App\Http\Requests\UpdateScheduleRequest;
 use App\Http\Resources\ScheduleResource;
 use App\Models\Schedule;
 use Carbon\CarbonImmutable;
@@ -95,6 +96,28 @@ class ScheduleController extends Controller
     {
         Gate::authorize('view', $schedule);
 
+        $schedule->load('target');
+
+        return new ScheduleResource($schedule);
+    }
+
+    public function update(UpdateScheduleRequest $request, Schedule $schedule): ScheduleResource
+    {
+        Gate::authorize('update', $schedule);
+
+        $data = $request->validated();
+
+        if ($data['is_all_day']) {
+            $data['starts_at'] = CarbonImmutable::createFromFormat('!Y-m-d', $data['starts_at'], 'UTC');
+            $data['ends_at'] = CarbonImmutable::createFromFormat('!Y-m-d', $data['ends_at'], 'UTC');
+        } else {
+            $data['starts_at'] = CarbonImmutable::parse($data['starts_at'])->utc();
+            $data['ends_at'] = isset($data['ends_at'])
+                ? CarbonImmutable::parse($data['ends_at'])->utc()
+                : null;
+        }
+
+        $schedule->update($data);
         $schedule->load('target');
 
         return new ScheduleResource($schedule);

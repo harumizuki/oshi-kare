@@ -35,3 +35,6 @@ Route::get('/schedules', [ScheduleController::class, 'index'])
 
 Route::get('/schedules/{schedule}', [ScheduleController::class, 'show'])
     ->middleware('auth:sanctum');
+
+Route::patch('/schedules/{schedule}', [ScheduleController::class, 'update'])
+    ->middleware('auth:sanctum');
