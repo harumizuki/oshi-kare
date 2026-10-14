@@ -1,32 +1,67 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { ApiError } from '../api/client'
+import { getSchedules } from '../api/schedules'
 import Calendar from '../components/Calendar'
 import ScheduleList from '../components/ScheduleList'
-import { createMockSchedules } from '../data/mockSchedules'
-import { formatDateLabel, formatMonthLabel, toDateKey } from '../utils/date'
+import { formatDateLabel, formatMonthLabel, getMonthRange, toDateKey } from '../utils/date'
+import { adaptSchedules } from '../utils/schedules'
 
-function HomePage({ user, onLogout, isLoggingOut, logoutError }) {
+function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired }) {
   const today = useMemo(() => new Date(), [])
-  const schedules = useMemo(() => createMockSchedules(today), [today])
   const [displayedMonth, setDisplayedMonth] = useState(
     () => new Date(today.getFullYear(), today.getMonth(), 1),
   )
   const [selectedDate, setSelectedDate] = useState(null)
+  const [schedules, setSchedules] = useState([])
+  const [scheduleStatus, setScheduleStatus] = useState('loading')
+  const [retryCount, setRetryCount] = useState(0)
+
+  const monthRange = useMemo(() => getMonthRange(displayedMonth), [displayedMonth])
+
+  useEffect(() => {
+    const controller = new AbortController()
+    let isCurrentRequest = true
+
+    setSchedules([])
+    setScheduleStatus('loading')
+
+    getSchedules(monthRange.start, monthRange.end, controller.signal)
+      .then((response) => {
+        if (!isCurrentRequest) return
+
+        setSchedules(adaptSchedules(response.data, monthRange.start, monthRange.end))
+        setScheduleStatus('success')
+      })
+      .catch((error) => {
+        if (!isCurrentRequest || error.name === 'AbortError') return
+
+        if (error instanceof ApiError && error.status === 401) {
+          onSessionExpired()
+          return
+        }
+
+        setScheduleStatus('error')
+      })
+
+    return () => {
+      isCurrentRequest = false
+      controller.abort()
+    }
+  }, [monthRange, onSessionExpired, retryCount])
 
   const displayedSchedules = useMemo(() => {
-    const monthKey = `${displayedMonth.getFullYear()}-${String(displayedMonth.getMonth() + 1).padStart(2, '0')}`
-
     return schedules
       .filter((schedule) =>
         selectedDate
-          ? schedule.date === selectedDate
-          : schedule.date.startsWith(monthKey),
+          ? schedule.dateKeys.includes(selectedDate)
+          : true,
       )
       .sort(
         (first, second) =>
-          first.date.localeCompare(second.date) ||
+          first.startDate.localeCompare(second.startDate) ||
           (first.time ?? '').localeCompare(second.time ?? ''),
       )
-  }, [displayedMonth, schedules, selectedDate])
+  }, [schedules, selectedDate])
 
   const changeMonth = (offset) => {
     setDisplayedMonth(
@@ -100,7 +135,25 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError }) {
             )}
           </div>
 
-          <ScheduleList schedules={displayedSchedules} isDateSelected={Boolean(selectedDate)} />
+          {scheduleStatus === 'loading' && (
+            <div className="schedule-state" role="status">
+              <span className="loading-spinner" aria-hidden="true" />
+              <p>予定を読み込んでいます…</p>
+            </div>
+          )}
+          {scheduleStatus === 'error' && (
+            <div className="schedule-state" role="alert">
+              <span aria-hidden="true">⚠️</span>
+              <h3>予定を取得できませんでした</h3>
+              <p>通信状況を確認して、もう一度お試しください。</p>
+              <button className="retry-button" type="button" onClick={() => setRetryCount((count) => count + 1)}>
+                再試行
+              </button>
+            </div>
+          )}
+          {scheduleStatus === 'success' && (
+            <ScheduleList schedules={displayedSchedules} isDateSelected={Boolean(selectedDate)} />
+          )}
         </section>
       </div>
     </main>

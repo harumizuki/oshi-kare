@@ -60,6 +60,11 @@ function App() {
     }
   }
 
+  const handleSessionExpired = useCallback(() => {
+    setUser(null)
+    setAuthStatus('guest')
+  }, [])
+
   if (authStatus === 'checking') {
     return <StatusScreen title="ログイン状態を確認しています" message="少々お待ちください。" />
   }
@@ -94,6 +99,7 @@ function App() {
                 onLogout={handleLogout}
                 isLoggingOut={isLoggingOut}
                 logoutError={logoutError}
+                onSessionExpired={handleSessionExpired}
               />
             )
             : <Navigate to="/login" replace />

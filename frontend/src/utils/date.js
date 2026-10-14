@@ -27,3 +27,30 @@ export function formatDateLabel(dateKey) {
 
   return `${month}月${day}日（${weekDay}）`
 }
+
+export function getMonthRange(date) {
+  const year = date.getFullYear()
+  const month = date.getMonth()
+
+  return {
+    start: toDateKey(new Date(year, month, 1)),
+    end: toDateKey(new Date(year, month + 1, 0)),
+  }
+}
+
+export function enumerateDateKeys(start, end) {
+  const [startYear, startMonth, startDay] = start.split('-').map(Number)
+  const [endYear, endMonth, endDay] = end.split('-').map(Number)
+  const current = new Date(Date.UTC(startYear, startMonth - 1, startDay))
+  const last = new Date(Date.UTC(endYear, endMonth - 1, endDay))
+  const dateKeys = []
+
+  while (current <= last) {
+    dateKeys.push(
+      `${current.getUTCFullYear()}-${padNumber(current.getUTCMonth() + 1)}-${padNumber(current.getUTCDate())}`,
+    )
+    current.setUTCDate(current.getUTCDate() + 1)
+  }
+
+  return dateKeys
+}

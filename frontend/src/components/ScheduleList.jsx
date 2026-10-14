@@ -18,11 +18,14 @@ function ScheduleList({ schedules, isDateSelected }) {
           <div className="schedule-icon" aria-hidden="true">{schedule.icon}</div>
           <div className="schedule-content">
             <div className="schedule-meta">
-              <time dateTime={schedule.date}>{formatDateLabel(schedule.date)}</time>
+              <time dateTime={schedule.startDate}>
+                {formatDateLabel(schedule.startDate)}
+                {schedule.endDate !== schedule.startDate && `〜${formatDateLabel(schedule.endDate)}`}
+              </time>
               <span>{schedule.time ?? '終日'}</span>
             </div>
             <h3>{schedule.title}</h3>
-            <p>{schedule.target ?? '個人予定'}</p>
+            <p>{schedule.target?.name ?? '個人予定'}</p>
           </div>
         </li>
       ))}

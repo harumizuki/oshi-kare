@@ -23,7 +23,7 @@ export async function initializeCsrfProtection() {
 }
 
 export async function request(path, options = {}) {
-  const { method = 'GET', body, requiresCsrf = false } = options
+  const { method = 'GET', body, requiresCsrf = false, signal } = options
   const headers = new Headers({
     Accept: 'application/json',
   })
@@ -50,8 +50,11 @@ export async function request(path, options = {}) {
       headers,
       credentials: 'include',
       body: body === undefined ? undefined : JSON.stringify(body),
+      signal,
     })
-  } catch {
+  } catch (error) {
+    if (error.name === 'AbortError') throw error
+
     throw new ApiError('サーバーと通信できませんでした。')
   }
 

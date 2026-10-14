@@ -77,6 +77,13 @@ button:focus-visible { outline: 3px solid rgb(145 83 157 / 30%); outline-offset:
 .empty-state > span { font-size: 2rem; filter: grayscale(.35); }
 .empty-state h3 { margin: 12px 0 4px; color: #484149; font-size: 1rem; }
 .empty-state p { margin: 0; font-size: .82rem; }
+.schedule-state { display: grid; min-height: 260px; place-items: center; align-content: center; padding: 28px; border: 1px dashed #dfd4e1; border-radius: 16px; color: #777079; text-align: center; }
+.schedule-state > span:not(.loading-spinner) { font-size: 1.8rem; }
+.schedule-state h3 { margin: 12px 0 4px; color: #484149; font-size: 1rem; }
+.schedule-state p { margin: 8px 0 0; font-size: .82rem; }
+.loading-spinner { width: 28px; height: 28px; border: 3px solid #eadfeb; border-top-color: #875293; border-radius: 50%; animation: spin .8s linear infinite; }
+.retry-button { margin-top: 14px; padding: 8px 14px; border: 1px solid #d8c8db; border-radius: 9px; color: #704a78; background: #fff; font-size: .8rem; font-weight: 700; cursor: pointer; }
+@keyframes spin { to { transform: rotate(360deg); } }
 .login-page, .status-screen { display: grid; min-height: 100vh; place-items: center; padding: 24px; }
 .login-card, .status-card { width: min(100%, 440px); padding: 38px; border: 1px solid #eadfeb; border-radius: 22px; background: rgb(255 255 255 / 94%); box-shadow: 0 18px 50px rgb(74 48 80 / 10%); }
 .login-heading { margin-bottom: 28px; text-align: center; }

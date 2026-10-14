@@ -5,7 +5,7 @@ const weekDays = ['日', '月', '火', '水', '木', '金', '土']
 
 function Calendar({ displayedMonth, schedules, selectedDate, today, onSelectDate }) {
   const calendarDays = createCalendarDays(displayedMonth)
-  const scheduleDates = new Set(schedules.map((schedule) => schedule.date))
+  const scheduleDates = new Set(schedules.flatMap((schedule) => schedule.dateKeys))
   const todayKey = toDateKey(today)
 
   return (
