@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { ApiError } from '../api/client'
 import { getSchedules } from '../api/schedules'
 import Calendar from '../components/Calendar'
+import ScheduleCreateModal from '../components/ScheduleCreateModal'
 import ScheduleList from '../components/ScheduleList'
 import { formatDateLabel, formatMonthLabel, getMonthRange, toDateKey } from '../utils/date'
 import { adaptSchedules } from '../utils/schedules'
@@ -15,6 +16,8 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
   const [schedules, setSchedules] = useState([])
   const [scheduleStatus, setScheduleStatus] = useState('loading')
   const [retryCount, setRetryCount] = useState(0)
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
   const monthRange = useMemo(() => getMonthRange(displayedMonth), [displayedMonth])
 
@@ -49,6 +52,13 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
     }
   }, [monthRange, onSessionExpired, retryCount])
 
+  useEffect(() => {
+    if (!successMessage) return undefined
+
+    const timer = window.setTimeout(() => setSuccessMessage(''), 4000)
+    return () => window.clearTimeout(timer)
+  }, [successMessage])
+
   const displayedSchedules = useMemo(() => {
     return schedules
       .filter((schedule) =>
@@ -80,6 +90,27 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
     ? `${formatDateLabel(selectedDate)}の予定`
     : `${formatMonthLabel(displayedMonth)}の予定`
 
+  const modalInitialDate = selectedDate
+    ?? (today.getFullYear() === displayedMonth.getFullYear()
+      && today.getMonth() === displayedMonth.getMonth()
+      ? toDateKey(today)
+      : monthRange.start)
+
+  const openCreateModal = () => {
+    setSuccessMessage('')
+    setIsCreateModalOpen(true)
+  }
+
+  const handleScheduleCreated = (startDate) => {
+    const [year, month] = startDate.split('-').map(Number)
+
+    setDisplayedMonth(new Date(year, month - 1, 1))
+    setSelectedDate(startDate)
+    setIsCreateModalOpen(false)
+    setSuccessMessage('予定を登録しました。')
+    setRetryCount((count) => count + 1)
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -96,13 +127,12 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
             </button>
           </div>
           <div className="add-schedule-area">
-            <button className="add-schedule-button" type="button" disabled>
+            <button className="add-schedule-button" type="button" onClick={openCreateModal}>
               ＋ 予定を追加
-              <span>準備中</span>
             </button>
-            <p>予定登録は今後のアップデートで利用できます</p>
           </div>
           {logoutError && <p className="header-error" role="alert">{logoutError}</p>}
+          {successMessage && <p className="success-message" role="status">{successMessage}</p>}
         </div>
       </header>
 
@@ -156,6 +186,15 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
           )}
         </section>
       </div>
+
+      {isCreateModalOpen && (
+        <ScheduleCreateModal
+          initialDate={modalInitialDate}
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={handleScheduleCreated}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
     </main>
   )
 }
