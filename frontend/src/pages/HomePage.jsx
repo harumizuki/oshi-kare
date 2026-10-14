@@ -4,7 +4,7 @@ import ScheduleList from '../components/ScheduleList'
 import { createMockSchedules } from '../data/mockSchedules'
 import { formatDateLabel, formatMonthLabel, toDateKey } from '../utils/date'
 
-function HomePage() {
+function HomePage({ user, onLogout, isLoggingOut, logoutError }) {
   const today = useMemo(() => new Date(), [])
   const schedules = useMemo(() => createMockSchedules(today), [today])
   const [displayedMonth, setDisplayedMonth] = useState(
@@ -53,12 +53,21 @@ function HomePage() {
           <h1>推しカレ</h1>
         </div>
 
-        <div className="add-schedule-area">
-          <button className="add-schedule-button" type="button" disabled>
-            ＋ 予定を追加
-            <span>準備中</span>
-          </button>
-          <p>予定登録は今後のアップデートで利用できます</p>
+        <div className="header-actions">
+          <div className="user-area">
+            <span>{user.name}</span>
+            <button type="button" onClick={onLogout} disabled={isLoggingOut}>
+              {isLoggingOut ? 'ログアウト中…' : 'ログアウト'}
+            </button>
+          </div>
+          <div className="add-schedule-area">
+            <button className="add-schedule-button" type="button" disabled>
+              ＋ 予定を追加
+              <span>準備中</span>
+            </button>
+            <p>予定登録は今後のアップデートで利用できます</p>
+          </div>
+          {logoutError && <p className="header-error" role="alert">{logoutError}</p>}
         </div>
       </header>
 
