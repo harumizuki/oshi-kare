@@ -29,3 +29,12 @@ export async function updateSchedule(scheduleId, schedule) {
     requiresCsrf: true,
   })
 }
+
+export async function deleteSchedule(scheduleId) {
+  await initializeCsrfProtection()
+
+  return request(`/api/schedules/${scheduleId}`, {
+    method: 'DELETE',
+    requiresCsrf: true,
+  })
+}

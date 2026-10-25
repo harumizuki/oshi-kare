@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../api/client'
-import { getSchedule } from '../api/schedules'
+import { deleteSchedule, getSchedule } from '../api/schedules'
 
 const tokyoDateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
   timeZone: 'Asia/Tokyo',
@@ -38,11 +38,16 @@ function formatPeriod(schedule) {
   return end ? `${start} 〜 ${end}` : `${start} 〜 終了時刻未設定`
 }
 
-function ScheduleDetailModal({ scheduleId, onClose, onEdit, onSessionExpired }) {
+function ScheduleDetailModal({ scheduleId, onClose, onDeleted, onEdit, onSessionExpired }) {
   const closeButtonRef = useRef(null)
+  const cancelDeleteButtonRef = useRef(null)
+  const isDeletingRef = useRef(false)
   const [schedule, setSchedule] = useState(null)
   const [status, setStatus] = useState('loading')
   const [retryCount, setRetryCount] = useState(0)
+  const [isConfirmingDelete, setIsConfirmingDelete] = useState(false)
+  const [isDeleting, setIsDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState('')
 
   useEffect(() => {
     closeButtonRef.current?.focus()
@@ -80,15 +85,54 @@ function ScheduleDetailModal({ scheduleId, onClose, onEdit, onSessionExpired }) 
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key === 'Escape') onClose()
+      if (event.key !== 'Escape' || isDeleting) return
+
+      if (isConfirmingDelete) {
+        setIsConfirmingDelete(false)
+        setDeleteError('')
+      } else {
+        onClose()
+      }
     }
 
     document.addEventListener('keydown', handleKeyDown)
     return () => document.removeEventListener('keydown', handleKeyDown)
-  }, [onClose])
+  }, [isConfirmingDelete, isDeleting, onClose])
+
+  useEffect(() => {
+    if (isConfirmingDelete) cancelDeleteButtonRef.current?.focus()
+  }, [isConfirmingDelete])
 
   const handleBackdropClick = (event) => {
-    if (event.target === event.currentTarget) onClose()
+    if (event.target === event.currentTarget && !isDeleting) onClose()
+  }
+
+  const cancelDelete = () => {
+    setIsConfirmingDelete(false)
+    setDeleteError('')
+  }
+
+  const handleDelete = async () => {
+    if (isDeletingRef.current) return
+
+    isDeletingRef.current = true
+    setIsDeleting(true)
+    setDeleteError('')
+
+    try {
+      await deleteSchedule(scheduleId)
+      onDeleted()
+    } catch (error) {
+      if (error instanceof ApiError && error.status === 401) {
+        onSessionExpired()
+        return
+      }
+
+      setDeleteError('予定を削除できませんでした。通信状況を確認して、もう一度お試しください。')
+    } finally {
+      isDeletingRef.current = false
+      setIsDeleting(false)
+    }
   }
 
   return (
@@ -99,7 +143,7 @@ function ScheduleDetailModal({ scheduleId, onClose, onEdit, onSessionExpired }) 
             <p className="section-label">予定の詳細</p>
             <h2 id="schedule-detail-title">{schedule?.title ?? '予定を読み込み中'}</h2>
           </div>
-          <button ref={closeButtonRef} className="modal-close" type="button" onClick={onClose} aria-label="閉じる">×</button>
+          <button ref={closeButtonRef} className="modal-close" type="button" onClick={onClose} disabled={isDeleting} aria-label="閉じる">×</button>
         </div>
 
         {status === 'loading' && (
@@ -135,10 +179,25 @@ function ScheduleDetailModal({ scheduleId, onClose, onEdit, onSessionExpired }) 
               <DetailItem label="メモ" value={schedule.memo || '未設定'} isMultiline />
             </dl>
 
-            <div className="modal-actions">
-              <button className="secondary-button" type="button" onClick={onClose}>閉じる</button>
-              <button className="primary-button" type="button" onClick={() => onEdit(schedule)}>編集する</button>
-            </div>
+            {isConfirmingDelete ? (
+              <div className="delete-confirmation" role="alertdialog" aria-labelledby="delete-confirmation-title" aria-describedby="delete-confirmation-description">
+                <h3 id="delete-confirmation-title">この予定を削除しますか？</h3>
+                <p id="delete-confirmation-description">削除した予定は元に戻せません。</p>
+                {deleteError && <p className="form-error" role="alert">{deleteError}</p>}
+                <div className="modal-actions">
+                  <button ref={cancelDeleteButtonRef} className="secondary-button" type="button" onClick={cancelDelete} disabled={isDeleting}>キャンセル</button>
+                  <button className="danger-button" type="button" onClick={handleDelete} disabled={isDeleting}>{isDeleting ? '削除中…' : '削除する'}</button>
+                </div>
+              </div>
+            ) : (
+              <div className="modal-actions detail-actions">
+                <button className="danger-text-button" type="button" onClick={() => setIsConfirmingDelete(true)}>削除する</button>
+                <div>
+                  <button className="secondary-button" type="button" onClick={onClose}>閉じる</button>
+                  <button className="primary-button" type="button" onClick={() => onEdit(schedule)}>編集する</button>
+                </div>
+              </div>
+            )}
           </>
         )}
       </section>

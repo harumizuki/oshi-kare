@@ -120,6 +120,12 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
     setRetryCount((count) => count + 1)
   }
 
+  const handleScheduleDeleted = () => {
+    setDetailScheduleId(null)
+    setSuccessMessage('予定を削除しました。')
+    setRetryCount((count) => count + 1)
+  }
+
   const startEditing = (schedule) => {
     setDetailScheduleId(null)
     setEditingSchedule(schedule)
@@ -218,6 +224,7 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
         <ScheduleDetailModal
           scheduleId={detailScheduleId}
           onClose={() => setDetailScheduleId(null)}
+          onDeleted={handleScheduleDeleted}
           onEdit={startEditing}
           onSessionExpired={onSessionExpired}
         />
