@@ -3,6 +3,7 @@ import { ApiError } from '../api/client'
 import { getSchedules } from '../api/schedules'
 import Calendar from '../components/Calendar'
 import ScheduleCreateModal from '../components/ScheduleCreateModal'
+import ScheduleDetailModal from '../components/ScheduleDetailModal'
 import ScheduleList from '../components/ScheduleList'
 import { formatDateLabel, formatMonthLabel, getMonthRange, toDateKey } from '../utils/date'
 import { adaptSchedules } from '../utils/schedules'
@@ -17,6 +18,8 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
   const [scheduleStatus, setScheduleStatus] = useState('loading')
   const [retryCount, setRetryCount] = useState(0)
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [detailScheduleId, setDetailScheduleId] = useState(null)
+  const [editingSchedule, setEditingSchedule] = useState(null)
   const [successMessage, setSuccessMessage] = useState('')
 
   const monthRange = useMemo(() => getMonthRange(displayedMonth), [displayedMonth])
@@ -111,6 +114,17 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
     setRetryCount((count) => count + 1)
   }
 
+  const handleScheduleUpdated = () => {
+    setEditingSchedule(null)
+    setSuccessMessage('予定を更新しました。')
+    setRetryCount((count) => count + 1)
+  }
+
+  const startEditing = (schedule) => {
+    setDetailScheduleId(null)
+    setEditingSchedule(schedule)
+  }
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -182,7 +196,11 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
             </div>
           )}
           {scheduleStatus === 'success' && (
-            <ScheduleList schedules={displayedSchedules} isDateSelected={Boolean(selectedDate)} />
+            <ScheduleList
+              schedules={displayedSchedules}
+              isDateSelected={Boolean(selectedDate)}
+              onSelectSchedule={setDetailScheduleId}
+            />
           )}
         </section>
       </div>
@@ -192,6 +210,25 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
           initialDate={modalInitialDate}
           onClose={() => setIsCreateModalOpen(false)}
           onCreated={handleScheduleCreated}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+
+      {detailScheduleId !== null && (
+        <ScheduleDetailModal
+          scheduleId={detailScheduleId}
+          onClose={() => setDetailScheduleId(null)}
+          onEdit={startEditing}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+
+      {editingSchedule !== null && (
+        <ScheduleCreateModal
+          initialDate={editingSchedule.starts_at}
+          schedule={editingSchedule}
+          onClose={() => setEditingSchedule(null)}
+          onUpdated={handleScheduleUpdated}
           onSessionExpired={onSessionExpired}
         />
       )}

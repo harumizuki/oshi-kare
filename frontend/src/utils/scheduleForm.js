@@ -9,6 +9,67 @@ function toJapanIso(date, time) {
   return `${date}T${time}:00+09:00`
 }
 
+const tokyoDateTimePartsFormatter = new Intl.DateTimeFormat('en-US', {
+  timeZone: 'Asia/Tokyo',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+  hour: '2-digit',
+  minute: '2-digit',
+  hourCycle: 'h23',
+})
+
+function getTokyoDateTimeParts(value) {
+  if (!value) return { date: '', time: '' }
+
+  const parts = Object.fromEntries(
+    tokyoDateTimePartsFormatter
+      .formatToParts(new Date(value))
+      .filter((part) => part.type !== 'literal')
+      .map((part) => [part.type, part.value]),
+  )
+
+  return {
+    date: `${parts.year}-${parts.month}-${parts.day}`,
+    time: `${parts.hour}:${parts.minute}`,
+  }
+}
+
+export function scheduleToFormValues(schedule) {
+  if (schedule.is_all_day) {
+    return {
+      title: schedule.title,
+      scheduleType: schedule.schedule_type,
+      startDate: schedule.starts_at,
+      endDate: schedule.ends_at ?? schedule.starts_at,
+      isAllDay: true,
+      startTime: '09:00',
+      endTime: '',
+      targetId: schedule.target?.id ? String(schedule.target.id) : '',
+      location: schedule.location ?? '',
+      url: schedule.url ?? '',
+      memo: schedule.memo ?? '',
+    }
+  }
+
+  const start = getTokyoDateTimeParts(schedule.starts_at)
+  const end = getTokyoDateTimeParts(schedule.ends_at)
+
+  return {
+    title: schedule.title,
+    scheduleType: schedule.schedule_type,
+    startDate: start.date,
+    endDate: end.date,
+    isAllDay: false,
+    startTime: start.time,
+    endTime: end.time,
+    targetId: schedule.target?.id ? String(schedule.target.id) : '',
+    location: schedule.location ?? '',
+    url: schedule.url ?? '',
+    memo: schedule.memo ?? '',
+  }
+}
+
 export function buildSchedulePayload(values) {
   const errors = {}
   const title = values.title.trim()
@@ -59,7 +120,9 @@ export function buildSchedulePayload(values) {
       is_all_day: values.isAllDay,
       starts_at: startsAt,
       ends_at: endsAt,
-      memo: values.memo.trim() || null,
+      location: (values.location ?? '').trim() || null,
+      url: (values.url ?? '').trim() || null,
+      memo: (values.memo ?? '').trim() || null,
     },
   }
 }
@@ -73,6 +136,8 @@ export function mapScheduleApiErrors(apiErrors = {}) {
     startTime: apiErrors.starts_at?.[0],
     endDate: apiErrors.ends_at?.[0],
     endTime: apiErrors.ends_at?.[0],
+    location: apiErrors.location?.[0],
+    url: apiErrors.url?.[0],
     memo: apiErrors.memo?.[0],
   }
 }

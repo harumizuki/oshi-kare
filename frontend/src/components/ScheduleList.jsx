@@ -1,6 +1,6 @@
 import { formatDateLabel } from '../utils/date'
 
-function ScheduleList({ schedules, isDateSelected }) {
+function ScheduleList({ schedules, isDateSelected, onSelectSchedule }) {
   if (schedules.length === 0) {
     return (
       <div className="empty-state">
@@ -15,18 +15,20 @@ function ScheduleList({ schedules, isDateSelected }) {
     <ol className="schedule-list">
       {schedules.map((schedule) => (
         <li className="schedule-card" key={schedule.id}>
-          <div className="schedule-icon" aria-hidden="true">{schedule.icon}</div>
-          <div className="schedule-content">
-            <div className="schedule-meta">
-              <time dateTime={schedule.startDate}>
-                {formatDateLabel(schedule.startDate)}
-                {schedule.endDate !== schedule.startDate && `〜${formatDateLabel(schedule.endDate)}`}
-              </time>
-              <span>{schedule.time ?? '終日'}</span>
+          <button className="schedule-card-button" type="button" onClick={() => onSelectSchedule(schedule.id)}>
+            <div className="schedule-icon" aria-hidden="true">{schedule.icon}</div>
+            <div className="schedule-content">
+              <div className="schedule-meta">
+                <time dateTime={schedule.startDate}>
+                  {formatDateLabel(schedule.startDate)}
+                  {schedule.endDate !== schedule.startDate && `〜${formatDateLabel(schedule.endDate)}`}
+                </time>
+                <span>{schedule.time ?? '終日'}</span>
+              </div>
+              <h3>{schedule.title}</h3>
+              <p>{schedule.target?.name ?? '個人予定'}</p>
             </div>
-            <h3>{schedule.title}</h3>
-            <p>{schedule.target?.name ?? '個人予定'}</p>
-          </div>
+          </button>
         </li>
       ))}
     </ol>

@@ -1,26 +1,34 @@
 import { useEffect, useRef, useState } from 'react'
-import { createSchedule } from '../api/schedules'
+import { createSchedule, updateSchedule } from '../api/schedules'
 import { getTargets } from '../api/targets'
 import { ApiError } from '../api/client'
 import {
   buildSchedulePayload,
   mapScheduleApiErrors,
+  scheduleToFormValues,
   scheduleTypeOptions,
 } from '../utils/scheduleForm'
 
-function ScheduleCreateModal({ initialDate, onClose, onCreated, onSessionExpired }) {
+function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated, onUpdated, onSessionExpired }) {
   const titleInputRef = useRef(null)
-  const [values, setValues] = useState({
-    title: '',
-    scheduleType: '通常予定',
-    startDate: initialDate,
-    endDate: '',
-    isAllDay: true,
-    startTime: '09:00',
-    endTime: '',
-    targetId: '',
-    memo: '',
-  })
+  const isEditing = schedule !== null
+  const [values, setValues] = useState(() => (
+    schedule
+      ? scheduleToFormValues(schedule)
+      : {
+          title: '',
+          scheduleType: '通常予定',
+          startDate: initialDate,
+          endDate: '',
+          isAllDay: true,
+          startTime: '09:00',
+          endTime: '',
+          targetId: '',
+          location: '',
+          url: '',
+          memo: '',
+        }
+  ))
   const [targets, setTargets] = useState([])
   const [targetStatus, setTargetStatus] = useState('loading')
   const [targetRetryCount, setTargetRetryCount] = useState(0)
@@ -90,8 +98,13 @@ function ScheduleCreateModal({ initialDate, onClose, onCreated, onSessionExpired
     setIsSaving(true)
 
     try {
-      await createSchedule(payload)
-      onCreated(values.startDate)
+      if (isEditing) {
+        await updateSchedule(schedule.id, payload)
+        onUpdated()
+      } else {
+        await createSchedule(payload)
+        onCreated(values.startDate)
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         onSessionExpired()
@@ -101,7 +114,7 @@ function ScheduleCreateModal({ initialDate, onClose, onCreated, onSessionExpired
       if (error instanceof ApiError && error.status === 422) {
         setFieldErrors(mapScheduleApiErrors(error.data?.errors))
       } else {
-        setSubmitError('予定を登録できませんでした。通信状況を確認して、もう一度お試しください。')
+        setSubmitError(`予定を${isEditing ? '更新' : '登録'}できませんでした。通信状況を確認して、もう一度お試しください。`)
       }
     } finally {
       setIsSaving(false)
@@ -117,8 +130,8 @@ function ScheduleCreateModal({ initialDate, onClose, onCreated, onSessionExpired
       <section className="schedule-modal" role="dialog" aria-modal="true" aria-labelledby="schedule-modal-title">
         <div className="modal-header">
           <div>
-            <p className="section-label">新しい予定</p>
-            <h2 id="schedule-modal-title">予定を追加</h2>
+            <p className="section-label">{isEditing ? '予定の編集' : '新しい予定'}</p>
+            <h2 id="schedule-modal-title">予定を{isEditing ? '編集' : '追加'}</h2>
           </div>
           <button className="modal-close" type="button" onClick={onClose} disabled={isSaving} aria-label="閉じる">×</button>
         </div>
@@ -131,6 +144,9 @@ function ScheduleCreateModal({ initialDate, onClose, onCreated, onSessionExpired
 
             <label htmlFor="schedule-type">予定の種類 <span>必須</span></label>
             <select id="schedule-type" value={values.scheduleType} onChange={(event) => updateValue('scheduleType', event.target.value)} required>
+              {!scheduleTypeOptions.some((option) => option.value === values.scheduleType) && (
+                <option value={values.scheduleType}>{values.scheduleType}</option>
+              )}
               {scheduleTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
             </select>
             <FieldError message={fieldErrors.scheduleType} />
@@ -182,6 +198,14 @@ function ScheduleCreateModal({ initialDate, onClose, onCreated, onSessionExpired
             )}
             <FieldError message={fieldErrors.targetId} />
 
+            <label htmlFor="schedule-location">場所</label>
+            <input id="schedule-location" value={values.location} onChange={(event) => updateValue('location', event.target.value)} maxLength="255" />
+            <FieldError message={fieldErrors.location} />
+
+            <label htmlFor="schedule-url">URL</label>
+            <input id="schedule-url" type="url" value={values.url} onChange={(event) => updateValue('url', event.target.value)} maxLength="2048" placeholder="https://example.com" />
+            <FieldError message={fieldErrors.url} />
+
             <label htmlFor="schedule-memo">メモ</label>
             <textarea id="schedule-memo" rows="3" value={values.memo} onChange={(event) => updateValue('memo', event.target.value)} />
             <FieldError message={fieldErrors.memo} />
@@ -191,7 +215,7 @@ function ScheduleCreateModal({ initialDate, onClose, onCreated, onSessionExpired
 
           <div className="modal-actions">
             <button className="secondary-button" type="button" onClick={onClose} disabled={isSaving}>キャンセル</button>
-            <button className="primary-button" type="submit" disabled={isSaving}>{isSaving ? '保存中…' : '保存する'}</button>
+            <button className="primary-button" type="submit" disabled={isSaving}>{isSaving ? '保存中…' : isEditing ? '変更を保存' : '保存する'}</button>
           </div>
         </form>
       </section>
