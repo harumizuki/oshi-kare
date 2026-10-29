@@ -114,7 +114,11 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
     setRetryCount((count) => count + 1)
   }
 
-  const handleScheduleUpdated = () => {
+  const handleScheduleUpdated = (startDate) => {
+    const [year, month] = startDate.split('-').map(Number)
+
+    setDisplayedMonth(new Date(year, month - 1, 1))
+    setSelectedDate(startDate)
     setEditingSchedule(null)
     setSuccessMessage('予定を更新しました。')
     setRetryCount((count) => count + 1)

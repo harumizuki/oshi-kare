@@ -100,7 +100,7 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
     try {
       if (isEditing) {
         await updateSchedule(schedule.id, payload)
-        onUpdated()
+        onUpdated(values.startDate)
       } else {
         await createSchedule(payload)
         onCreated(values.startDate)
