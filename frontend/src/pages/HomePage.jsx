@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { getSchedules } from '../api/schedules'
 import Calendar from '../components/Calendar'
@@ -151,6 +152,7 @@ function HomePage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired 
             </button>
           </div>
           <div className="add-schedule-area">
+            <Link className="navigation-link" to="/targets">推し一覧</Link>
             <button className="add-schedule-button" type="button" onClick={openCreateModal}>
               ＋ 予定を追加
             </button>

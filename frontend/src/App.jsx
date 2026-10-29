@@ -4,6 +4,7 @@ import { getCurrentUser, login, logout } from './api/auth'
 import { ApiError } from './api/client'
 import HomePage from './pages/HomePage.jsx'
 import LoginPage from './pages/LoginPage.jsx'
+import TargetsPage from './pages/TargetsPage.jsx'
 
 function App() {
   const [authStatus, setAuthStatus] = useState('checking')
@@ -95,6 +96,22 @@ function App() {
           authStatus === 'authenticated'
             ? (
               <HomePage
+                user={user}
+                onLogout={handleLogout}
+                isLoggingOut={isLoggingOut}
+                logoutError={logoutError}
+                onSessionExpired={handleSessionExpired}
+              />
+            )
+            : <Navigate to="/login" replace />
+        }
+      />
+      <Route
+        path="/targets"
+        element={
+          authStatus === 'authenticated'
+            ? (
+              <TargetsPage
                 user={user}
                 onLogout={handleLogout}
                 isLoggingOut={isLoggingOut}
