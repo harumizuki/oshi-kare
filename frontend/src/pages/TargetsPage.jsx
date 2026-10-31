@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { getTargets } from '../api/targets'
@@ -7,22 +7,42 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
   const [targets, setTargets] = useState([])
   const [targetStatus, setTargetStatus] = useState('loading')
   const [retryCount, setRetryCount] = useState(0)
+  const [keyword, setKeyword] = useState('')
+  const [debouncedKeyword, setDebouncedKeyword] = useState('')
+  const requestVersionRef = useRef(0)
+  const normalizedKeyword = keyword.trim()
+  const isWaitingForSearch = normalizedKeyword !== debouncedKeyword
+  const isSearching = debouncedKeyword !== ''
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setDebouncedKeyword(normalizedKeyword)
+    }, 300)
+
+    return () => window.clearTimeout(timer)
+  }, [normalizedKeyword])
 
   useEffect(() => {
     const controller = new AbortController()
+    const requestVersion = requestVersionRef.current + 1
     let isCurrentRequest = true
 
+    requestVersionRef.current = requestVersion
     setTargetStatus('loading')
 
-    getTargets(controller.signal)
+    getTargets(controller.signal, debouncedKeyword)
       .then((response) => {
-        if (!isCurrentRequest) return
+        if (!isCurrentRequest || requestVersion !== requestVersionRef.current) return
 
         setTargets(response.data)
         setTargetStatus('success')
       })
       .catch((error) => {
-        if (!isCurrentRequest || error.name === 'AbortError') return
+        if (
+          !isCurrentRequest
+          || requestVersion !== requestVersionRef.current
+          || error.name === 'AbortError'
+        ) return
 
         if (error instanceof ApiError && error.status === 401) {
           onSessionExpired()
@@ -36,7 +56,9 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
       isCurrentRequest = false
       controller.abort()
     }
-  }, [onSessionExpired, retryCount])
+  }, [debouncedKeyword, onSessionExpired, retryCount])
+
+  const isLoading = isWaitingForSearch || targetStatus === 'loading'
 
   return (
     <main className="app-shell">
@@ -64,20 +86,39 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
             <p className="section-label">登録済みの推し</p>
             <h2 id="targets-title">推し一覧</h2>
           </div>
-          {targetStatus === 'success' && <p>{targets.length}件</p>}
+          {!isWaitingForSearch && targetStatus === 'success' && <p>{targets.length}件</p>}
         </div>
 
-        {targetStatus === 'loading' && (
+        <div className="target-search">
+          <label htmlFor="target-keyword">名前で検索</label>
+          <div className="target-search-control">
+            <input
+              id="target-keyword"
+              type="search"
+              value={keyword}
+              onChange={(event) => setKeyword(event.target.value)}
+              maxLength="255"
+              placeholder="推しの名前を入力"
+            />
+            {keyword && (
+              <button type="button" onClick={() => setKeyword('')} aria-label="検索文字を消去">
+                クリア
+              </button>
+            )}
+          </div>
+        </div>
+
+        {isLoading && (
           <div className="target-state" role="status">
             <span className="loading-spinner" aria-hidden="true" />
-            <p>推しを読み込んでいます…</p>
+            <p>{normalizedKeyword ? '検索しています…' : '推しを読み込んでいます…'}</p>
           </div>
         )}
 
-        {targetStatus === 'error' && (
+        {!isWaitingForSearch && targetStatus === 'error' && (
           <div className="target-state" role="alert">
             <span aria-hidden="true">⚠️</span>
-            <h3>推しを取得できませんでした</h3>
+            <h3>{isSearching ? '検索できませんでした' : '推しを取得できませんでした'}</h3>
             <p>通信状況を確認して、もう一度お試しください。</p>
             <button className="retry-button" type="button" onClick={() => setRetryCount((count) => count + 1)}>
               再試行
@@ -85,15 +126,19 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
           </div>
         )}
 
-        {targetStatus === 'success' && targets.length === 0 && (
+        {!isWaitingForSearch && targetStatus === 'success' && targets.length === 0 && (
           <div className="empty-state">
-            <span aria-hidden="true">🌱</span>
-            <h3>登録されている推しはありません</h3>
-            <p>推しを登録すると、ここで確認できるようになります。</p>
+            <span aria-hidden="true">{isSearching ? '🔍' : '🌱'}</span>
+            <h3>{isSearching ? '一致する推しはありません' : '登録されている推しはありません'}</h3>
+            <p>
+              {isSearching
+                ? '別の名前でもう一度お試しください。'
+                : '推しを登録すると、ここで確認できるようになります。'}
+            </p>
           </div>
         )}
 
-        {targetStatus === 'success' && targets.length > 0 && (
+        {!isWaitingForSearch && targetStatus === 'success' && targets.length > 0 && (
           <ul className="target-list">
             {targets.map((target) => (
               <li className="target-card" key={target.id}>

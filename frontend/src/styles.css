@@ -160,6 +160,13 @@ button:focus-visible { outline: 3px solid rgb(145 83 157 / 30%); outline-offset:
 .targets-heading > * { min-width: 0; }
 .targets-heading h2 { margin: 0; font-size: 1.35rem; }
 .targets-heading > p { margin: 0; color: #817783; font-size: .82rem; font-weight: 800; }
+.target-search { display: grid; gap: 7px; margin-bottom: 20px; }
+.target-search label { color: #554e57; font-size: .82rem; font-weight: 800; }
+.target-search-control { display: flex; gap: 8px; }
+.target-search-control input { min-width: 0; flex: 1; padding: 11px 12px; border: 1px solid #dcd1de; border-radius: 10px; color: #2f2933; background: #fff; font: inherit; outline: none; }
+.target-search-control input:focus { border-color: #93609d; box-shadow: 0 0 0 3px rgb(147 96 157 / 14%); }
+.target-search-control button { flex: 0 0 auto; padding: 8px 12px; border: 1px solid #d8c8db; border-radius: 9px; color: #704a78; background: #fff; font-size: .78rem; font-weight: 800; cursor: pointer; }
+.target-search-control button:hover { border-color: #b78cbd; background: #f8f0f9; }
 .target-state { display: grid; min-height: 300px; place-items: center; align-content: center; padding: 28px; border: 1px dashed #dfd4e1; border-radius: 16px; color: #777079; text-align: center; }
 .target-state > span:not(.loading-spinner) { font-size: 1.8rem; }
 .target-state h3 { margin: 12px 0 4px; color: #484149; font-size: 1rem; }
