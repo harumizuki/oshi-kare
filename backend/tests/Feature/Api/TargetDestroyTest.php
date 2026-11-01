@@ -65,6 +65,13 @@ class TargetDestroyTest extends TestCase
             'user_id' => $otherUser->id,
             'target_id' => null,
         ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $unrelatedSchedule->id,
+            'target_id' => $otherTarget->id,
+        ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'target_id' => $target->id,
+        ]);
     }
 
     public function test_keep_all_mode_deletes_only_target_and_keeps_all_schedules(): void
@@ -93,6 +100,9 @@ class TargetDestroyTest extends TestCase
             'id' => $secondSchedule->id,
             'target_id' => null,
         ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'target_id' => $target->id,
+        ]);
     }
 
     public function test_delete_selected_mode_deletes_only_selected_schedules(): void
@@ -119,6 +129,9 @@ class TargetDestroyTest extends TestCase
             'id' => $keptSchedule->id,
             'target_id' => null,
         ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'target_id' => $target->id,
+        ]);
     }
 
     public function test_delete_selected_mode_with_empty_selection_keeps_all_schedules(): void
@@ -142,6 +155,9 @@ class TargetDestroyTest extends TestCase
         $this->assertDatabaseHas('schedules', [
             'id' => $schedule->id,
             'target_id' => null,
+        ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'target_id' => $target->id,
         ]);
     }
 
@@ -402,7 +418,7 @@ class TargetDestroyTest extends TestCase
 
     private function createSchedule(User $user, Target $target, array $attributes = []): Schedule
     {
-        return Schedule::query()->forceCreate(array_merge([
+        $schedule = Schedule::query()->forceCreate(array_merge([
             'user_id' => $user->id,
             'target_id' => $target->id,
             'title' => 'テスト予定',
@@ -414,5 +430,9 @@ class TargetDestroyTest extends TestCase
             'url' => null,
             'memo' => null,
         ], $attributes));
+
+        $schedule->targets()->sync([$target->id]);
+
+        return $schedule;
     }
 }

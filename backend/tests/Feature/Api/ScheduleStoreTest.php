@@ -5,7 +5,9 @@ namespace Tests\Feature\Api;
 use App\Models\Category;
 use App\Models\Target;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ScheduleStoreTest extends TestCase
@@ -56,6 +58,10 @@ class ScheduleStoreTest extends TestCase
             'starts_at' => '2026-09-25 12:00:00',
             'ends_at' => '2026-09-25 14:00:00',
         ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $response->json('data.id'),
+            'target_id' => $target->id,
+        ]);
     }
 
     public function test_user_can_create_schedule_without_target_and_end_time(): void
@@ -78,6 +84,37 @@ class ScheduleStoreTest extends TestCase
             'target_id' => null,
             'ends_at' => null,
         ]);
+        $this->assertDatabaseCount('schedule_target', 0);
+    }
+
+    public function test_schedule_creation_rolls_back_when_pivot_sync_fails(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $target = $this->createTarget($user, $category);
+        $this->actingAs($user);
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER fail_schedule_target_insert
+            BEFORE INSERT ON schedule_target
+            BEGIN
+                SELECT RAISE(ABORT, 'pivot sync failed');
+            END
+            SQL);
+        $this->withoutExceptionHandling();
+
+        // Act
+        try {
+            $this->postJson('/api/schedules', array_merge(
+                $this->timedPayload(),
+                ['target_id' => $target->id]
+            ));
+            $this->fail('Pivot同期に失敗したSchedule登録が成功しました。');
+        } catch (QueryException) {
+            // Assert
+            $this->assertDatabaseCount('schedules', 0);
+            $this->assertDatabaseCount('schedule_target', 0);
+        }
     }
 
     public function test_client_supplied_user_id_cannot_assign_schedule_to_another_user(): void

@@ -2,7 +2,9 @@
 
 namespace Tests\Feature\Api;
 
+use App\Models\Category;
 use App\Models\Schedule;
+use App\Models\Target;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
@@ -32,7 +34,9 @@ class ScheduleDestroyTest extends TestCase
     {
         // Arrange
         $user = User::factory()->create();
-        $schedule = $this->createSchedule($user);
+        $target = $this->createTarget($user);
+        $schedule = $this->createSchedule($user, $target);
+        $schedule->targets()->sync([$target->id]);
         $this->actingAs($user);
 
         // Act
@@ -44,6 +48,9 @@ class ScheduleDestroyTest extends TestCase
             ->assertContent('');
         $this->assertDatabaseMissing('schedules', [
             'id' => $schedule->id,
+        ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'schedule_id' => $schedule->id,
         ]);
     }
 
@@ -79,11 +86,24 @@ class ScheduleDestroyTest extends TestCase
         $response->assertNotFound();
     }
 
-    private function createSchedule(User $user): Schedule
+    private function createTarget(User $user): Target
+    {
+        $category = Category::query()->forceCreate(['name' => 'テストカテゴリー']);
+
+        return Target::query()->forceCreate([
+            'user_id' => $user->id,
+            'category_id' => $category->id,
+            'name' => 'テストターゲット',
+            'target_type' => '個人',
+            'memo' => null,
+        ]);
+    }
+
+    private function createSchedule(User $user, ?Target $target = null): Schedule
     {
         return Schedule::query()->forceCreate([
             'user_id' => $user->id,
-            'target_id' => null,
+            'target_id' => $target?->id,
             'title' => 'テスト予定',
             'schedule_type' => '配信',
             'is_all_day' => false,

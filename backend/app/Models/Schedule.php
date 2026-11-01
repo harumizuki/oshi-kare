@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
 #[Fillable([
     'target_id',
@@ -27,6 +28,11 @@ class Schedule extends Model
     public function target(): BelongsTo
     {
         return $this->belongsTo(Target::class);
+    }
+
+    public function targets(): BelongsToMany
+    {
+        return $this->belongsToMany(Target::class);
     }
 
     /**

@@ -6,7 +6,9 @@ use App\Models\Category;
 use App\Models\Schedule;
 use App\Models\Target;
 use App\Models\User;
+use Illuminate\Database\QueryException;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Tests\TestCase;
 
 class ScheduleUpdateTest extends TestCase
@@ -74,13 +76,20 @@ class ScheduleUpdateTest extends TestCase
             'starts_at' => '2026-10-10 12:00:00',
             'ends_at' => '2026-10-10 14:00:00',
         ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $target->id,
+        ]);
     }
 
     public function test_owner_can_update_to_all_day_schedule_without_target(): void
     {
         // Arrange
         $user = User::factory()->create();
-        $schedule = $this->createSchedule($user);
+        $category = $this->createCategory();
+        $target = $this->createTarget($user, $category);
+        $schedule = $this->createSchedule($user, ['target_id' => $target->id]);
+        $schedule->targets()->sync([$target->id]);
         $this->actingAs($user);
 
         // Act
@@ -103,6 +112,86 @@ class ScheduleUpdateTest extends TestCase
             'starts_at' => '2026-10-10 00:00:00',
             'ends_at' => '2026-10-12 00:00:00',
         ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'schedule_id' => $schedule->id,
+        ]);
+    }
+
+    public function test_owner_can_change_target_and_keep_columns_in_sync(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $oldTarget = $this->createTarget($user, $category);
+        $newTarget = $this->createTarget($user, $category);
+        $schedule = $this->createSchedule($user, ['target_id' => $oldTarget->id]);
+        $schedule->targets()->sync([$oldTarget->id]);
+        $this->actingAs($user);
+
+        // Act
+        $response = $this->patchJson(
+            "/api/schedules/{$schedule->id}",
+            array_merge($this->timedPayload(), ['target_id' => $newTarget->id])
+        );
+
+        // Assert
+        $response->assertOk();
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $newTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $newTarget->id,
+        ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $oldTarget->id,
+        ]);
+    }
+
+    public function test_schedule_update_rolls_back_when_pivot_sync_fails(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $oldTarget = $this->createTarget($user, $category);
+        $newTarget = $this->createTarget($user, $category);
+        $schedule = $this->createSchedule($user, ['target_id' => $oldTarget->id]);
+        $schedule->targets()->sync([$oldTarget->id]);
+        $this->actingAs($user);
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER fail_schedule_target_insert
+            BEFORE INSERT ON schedule_target
+            BEGIN
+                SELECT RAISE(ABORT, 'pivot sync failed');
+            END
+            SQL);
+        $this->withoutExceptionHandling();
+
+        // Act
+        try {
+            $this->patchJson(
+                "/api/schedules/{$schedule->id}",
+                array_merge($this->timedPayload(), ['target_id' => $newTarget->id])
+            );
+            $this->fail('Pivot同期に失敗したSchedule更新が成功しました。');
+        } catch (QueryException) {
+            // Assert
+            $this->assertDatabaseHas('schedules', [
+                'id' => $schedule->id,
+                'target_id' => $oldTarget->id,
+                'title' => '更新前のテスト予定',
+            ]);
+            $this->assertDatabaseHas('schedule_target', [
+                'schedule_id' => $schedule->id,
+                'target_id' => $oldTarget->id,
+            ]);
+            $this->assertDatabaseMissing('schedule_target', [
+                'schedule_id' => $schedule->id,
+                'target_id' => $newTarget->id,
+            ]);
+        }
     }
 
     public function test_user_cannot_update_another_users_schedule(): void

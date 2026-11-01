@@ -12,6 +12,7 @@ use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -81,9 +82,15 @@ class ScheduleController extends Controller
                 : null;
         }
 
-        $schedule = $request->user()
-            ->schedules()
-            ->create($data);
+        $schedule = DB::transaction(function () use ($request, $data) {
+            $schedule = $request->user()
+                ->schedules()
+                ->create($data);
+
+            $this->syncLegacyTarget($schedule);
+
+            return $schedule;
+        });
 
         $schedule->load('target');
 
@@ -117,7 +124,11 @@ class ScheduleController extends Controller
                 : null;
         }
 
-        $schedule->update($data);
+        DB::transaction(function () use ($schedule, $data) {
+            $schedule->update($data);
+            $this->syncLegacyTarget($schedule);
+        });
+
         $schedule->load('target');
 
         return new ScheduleResource($schedule);
@@ -130,5 +141,14 @@ class ScheduleController extends Controller
         $schedule->delete();
 
         return response()->noContent();
+    }
+
+    private function syncLegacyTarget(Schedule $schedule): void
+    {
+        $targetIds = $schedule->target_id === null
+            ? []
+            : [(int) $schedule->target_id];
+
+        $schedule->targets()->sync($targetIds);
     }
 }
