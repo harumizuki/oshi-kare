@@ -120,8 +120,7 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
       <section className="panel targets-panel" aria-labelledby="targets-title">
         <div className="targets-heading">
           <div>
-            <p className="section-label">登録済み</p>
-            <h2 id="targets-title">一覧</h2>
+            <h2 id="targets-title">登録済み一覧</h2>
           </div>
           <div className="targets-heading-actions">
             {!isWaitingForSearch && targetStatus === 'success' && <p>{targets.length}件</p>}

@@ -141,7 +141,7 @@ function TargetCreateModal({ target = null, onClose, onCreated, onUpdated, onSes
       <section className="schedule-modal target-create-modal" role="dialog" aria-modal="true" aria-labelledby="target-modal-title">
         <div className="modal-header">
           <div>
-            <p className="section-label">{isEditing ? '登録内容' : '新しい登録'}</p>
+            {isEditing && <p className="section-label">登録内容</p>}
             <h2 id="target-modal-title">{isEditing ? '登録情報を編集' : '新規登録'}</h2>
           </div>
           <button className="modal-close" type="button" onClick={onClose} disabled={isSaving} aria-label="閉じる">×</button>
