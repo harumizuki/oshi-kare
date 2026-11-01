@@ -1,16 +1,17 @@
 import { useEffect, useRef, useState } from 'react'
 import { getCategories } from '../api/categories'
 import { ApiError } from '../api/client'
-import { createTarget } from '../api/targets'
+import { createTarget, updateTarget } from '../api/targets'
 
-function TargetCreateModal({ onClose, onCreated, onSessionExpired }) {
+function TargetCreateModal({ target = null, onClose, onCreated, onUpdated, onSessionExpired }) {
   const nameInputRef = useRef(null)
   const isSavingRef = useRef(false)
+  const isEditing = target !== null
   const [values, setValues] = useState({
-    name: '',
-    categoryId: '',
-    targetType: '',
-    memo: '',
+    name: target?.name ?? '',
+    categoryId: target?.category?.id ? String(target.category.id) : '',
+    targetType: target?.target_type ?? '',
+    memo: target?.memo ?? '',
   })
   const [categories, setCategories] = useState([])
   const [categoryStatus, setCategoryStatus] = useState('loading')
@@ -89,13 +90,20 @@ function TargetCreateModal({ onClose, onCreated, onSessionExpired }) {
     setIsSaving(true)
 
     try {
-      await createTarget({
+      const payload = {
         category_id: Number(values.categoryId),
         name,
         target_type: targetType,
         memo: values.memo.trim() || null,
-      })
-      onCreated()
+      }
+
+      if (isEditing) {
+        await updateTarget(target.id, payload)
+        onUpdated()
+      } else {
+        await createTarget(payload)
+        onCreated()
+      }
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
         onSessionExpired()
@@ -109,8 +117,12 @@ function TargetCreateModal({ onClose, onCreated, onSessionExpired }) {
           targetType: error.data?.errors?.target_type?.[0],
           memo: error.data?.errors?.memo?.[0],
         })
+      } else if (isEditing && error instanceof ApiError && error.status === 403) {
+        setSubmitError('この登録情報を編集する権限がありません。')
+      } else if (isEditing && error instanceof ApiError && error.status === 404) {
+        setSubmitError('編集対象が見つかりません。一覧を再読み込みしてください。')
       } else {
-        setSubmitError('推しを登録できませんでした。通信状況を確認して、もう一度お試しください。')
+        setSubmitError(`${isEditing ? '変更を保存' : '登録'}できませんでした。通信状況を確認して、もう一度お試しください。`)
       }
     } finally {
       isSavingRef.current = false
@@ -129,8 +141,8 @@ function TargetCreateModal({ onClose, onCreated, onSessionExpired }) {
       <section className="schedule-modal target-create-modal" role="dialog" aria-modal="true" aria-labelledby="target-modal-title">
         <div className="modal-header">
           <div>
-            <p className="section-label">新しい推し</p>
-            <h2 id="target-modal-title">推しを登録</h2>
+            <p className="section-label">{isEditing ? '登録内容' : '新しい登録'}</p>
+            <h2 id="target-modal-title">{isEditing ? '登録情報を編集' : '新規登録'}</h2>
           </div>
           <button className="modal-close" type="button" onClick={onClose} disabled={isSaving} aria-label="閉じる">×</button>
         </div>
@@ -149,7 +161,7 @@ function TargetCreateModal({ onClose, onCreated, onSessionExpired }) {
             {categoryStatus === 'loading' && <p className="field-note">カテゴリを読み込んでいます…</p>}
             {categoryStatus === 'error' && (
               <div className="target-load-error" role="alert">
-                <p>カテゴリを取得できないため登録できません。</p>
+                <p>カテゴリを取得できないため{isEditing ? '更新' : '登録'}できません。</p>
                 <button type="button" onClick={() => setCategoryRetryCount((count) => count + 1)}>再試行</button>
               </div>
             )}
@@ -169,7 +181,9 @@ function TargetCreateModal({ onClose, onCreated, onSessionExpired }) {
 
           <div className="modal-actions">
             <button className="secondary-button" type="button" onClick={onClose} disabled={isSaving}>キャンセル</button>
-            <button className="primary-button" type="submit" disabled={isSaving || !canSubmit}>{isSaving ? '登録中…' : '登録する'}</button>
+            <button className="primary-button" type="submit" disabled={isSaving || !canSubmit}>
+              {isSaving ? (isEditing ? '保存中…' : '登録中…') : (isEditing ? '変更を保存' : '登録する')}
+            </button>
           </div>
         </form>
       </section>

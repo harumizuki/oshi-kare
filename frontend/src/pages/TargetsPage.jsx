@@ -11,6 +11,7 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [editingTarget, setEditingTarget] = useState(null)
   const [successMessage, setSuccessMessage] = useState('')
   const requestVersionRef = useRef(0)
   const normalizedKeyword = keyword.trim()
@@ -79,7 +80,20 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
     setKeyword('')
     setDebouncedKeyword('')
     setIsCreateModalOpen(false)
-    setSuccessMessage('推しを登録しました。')
+    setSuccessMessage('登録しました。')
+    setRetryCount((count) => count + 1)
+  }
+
+  const openEditModal = (target) => {
+    setSuccessMessage('')
+    setEditingTarget(target)
+  }
+
+  const handleTargetUpdated = () => {
+    setKeyword('')
+    setDebouncedKeyword('')
+    setEditingTarget(null)
+    setSuccessMessage('変更を保存しました。')
     setRetryCount((count) => count + 1)
   }
 
@@ -106,12 +120,12 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
       <section className="panel targets-panel" aria-labelledby="targets-title">
         <div className="targets-heading">
           <div>
-            <p className="section-label">登録済みの推し</p>
-            <h2 id="targets-title">推し一覧</h2>
+            <p className="section-label">登録済み</p>
+            <h2 id="targets-title">一覧</h2>
           </div>
           <div className="targets-heading-actions">
             {!isWaitingForSearch && targetStatus === 'success' && <p>{targets.length}件</p>}
-            <button className="add-target-button" type="button" onClick={openCreateModal}>＋ 推しを登録</button>
+            <button className="add-target-button" type="button" onClick={openCreateModal}>＋ 登録する</button>
           </div>
         </div>
 
@@ -126,7 +140,7 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
               value={keyword}
               onChange={(event) => setKeyword(event.target.value)}
               maxLength="255"
-              placeholder="推しの名前を入力"
+              placeholder="名前を入力"
             />
             {keyword && (
               <button type="button" onClick={() => setKeyword('')} aria-label="検索文字を消去">
@@ -139,14 +153,14 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
         {isLoading && (
           <div className="target-state" role="status">
             <span className="loading-spinner" aria-hidden="true" />
-            <p>{normalizedKeyword ? '検索しています…' : '推しを読み込んでいます…'}</p>
+            <p>{normalizedKeyword ? '検索しています…' : '一覧を読み込んでいます…'}</p>
           </div>
         )}
 
         {!isWaitingForSearch && targetStatus === 'error' && (
           <div className="target-state" role="alert">
             <span aria-hidden="true">⚠️</span>
-            <h3>{isSearching ? '検索できませんでした' : '推しを取得できませんでした'}</h3>
+            <h3>{isSearching ? '検索できませんでした' : '一覧を取得できませんでした'}</h3>
             <p>通信状況を確認して、もう一度お試しください。</p>
             <button className="retry-button" type="button" onClick={() => setRetryCount((count) => count + 1)}>
               再試行
@@ -157,11 +171,11 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
         {!isWaitingForSearch && targetStatus === 'success' && targets.length === 0 && (
           <div className="empty-state">
             <span aria-hidden="true">{isSearching ? '🔍' : '🌱'}</span>
-            <h3>{isSearching ? '一致する推しはありません' : '登録されている推しはありません'}</h3>
+            <h3>{isSearching ? '一致する名前はありません' : '登録情報はありません'}</h3>
             <p>
               {isSearching
                 ? '別の名前でもう一度お試しください。'
-                : '推しを登録すると、ここで確認できるようになります。'}
+                : '登録すると、ここで確認できるようになります。'}
             </p>
           </div>
         )}
@@ -178,6 +192,11 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
                 <p className={target.memo ? 'target-memo' : 'target-memo is-empty'}>
                   {target.memo || 'メモはありません'}
                 </p>
+                <div className="target-card-actions">
+                  <button className="edit-target-button" type="button" onClick={() => openEditModal(target)} aria-label={`${target.name}を編集`}>
+                    編集
+                  </button>
+                </div>
               </li>
             ))}
           </ul>
@@ -188,6 +207,15 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
         <TargetCreateModal
           onClose={() => setIsCreateModalOpen(false)}
           onCreated={handleTargetCreated}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+
+      {editingTarget && (
+        <TargetCreateModal
+          target={editingTarget}
+          onClose={() => setEditingTarget(null)}
+          onUpdated={handleTargetUpdated}
           onSessionExpired={onSessionExpired}
         />
       )}

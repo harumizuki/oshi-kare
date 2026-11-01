@@ -184,6 +184,9 @@ button:focus-visible { outline: 3px solid rgb(145 83 157 / 30%); outline-offset:
 .target-type { margin: 8px 0 0; color: #8a818c; font-size: .76rem; font-weight: 700; }
 .target-memo { margin: 14px 0 0; padding-top: 14px; border-top: 1px solid #f0e9f1; overflow-wrap: anywhere; color: #5f5761; font-size: .84rem; line-height: 1.7; white-space: pre-wrap; }
 .target-memo.is-empty { color: #99909b; }
+.target-card-actions { display: flex; justify-content: flex-end; margin-top: 14px; }
+.edit-target-button { padding: 7px 13px; border: 1px solid #d8c8db; border-radius: 9px; color: #704a78; background: #fff; font-size: .76rem; font-weight: 800; cursor: pointer; }
+.edit-target-button:hover { border-color: #b78cbd; background: #f8f0f9; }
 .target-create-modal { width: min(100%, 560px); }
 
 @media (max-width: 820px) {

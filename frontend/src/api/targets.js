@@ -19,3 +19,13 @@ export async function createTarget(target) {
     requiresCsrf: true,
   })
 }
+
+export async function updateTarget(targetId, target) {
+  await initializeCsrfProtection()
+
+  return request(`/api/targets/${targetId}`, {
+    method: 'PATCH',
+    body: target,
+    requiresCsrf: true,
+  })
+}
