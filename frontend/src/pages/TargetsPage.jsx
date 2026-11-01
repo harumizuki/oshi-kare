@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { getTargets } from '../api/targets'
+import TargetCreateModal from '../components/TargetCreateModal'
 
 function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired }) {
   const [targets, setTargets] = useState([])
@@ -9,6 +10,8 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
   const [retryCount, setRetryCount] = useState(0)
   const [keyword, setKeyword] = useState('')
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
   const requestVersionRef = useRef(0)
   const normalizedKeyword = keyword.trim()
   const isWaitingForSearch = normalizedKeyword !== debouncedKeyword
@@ -58,7 +61,27 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
     }
   }, [debouncedKeyword, onSessionExpired, retryCount])
 
+  useEffect(() => {
+    if (!successMessage) return undefined
+
+    const timer = window.setTimeout(() => setSuccessMessage(''), 4000)
+    return () => window.clearTimeout(timer)
+  }, [successMessage])
+
   const isLoading = isWaitingForSearch || targetStatus === 'loading'
+
+  const openCreateModal = () => {
+    setSuccessMessage('')
+    setIsCreateModalOpen(true)
+  }
+
+  const handleTargetCreated = () => {
+    setKeyword('')
+    setDebouncedKeyword('')
+    setIsCreateModalOpen(false)
+    setSuccessMessage('推しを登録しました。')
+    setRetryCount((count) => count + 1)
+  }
 
   return (
     <main className="app-shell">
@@ -86,8 +109,13 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
             <p className="section-label">登録済みの推し</p>
             <h2 id="targets-title">推し一覧</h2>
           </div>
-          {!isWaitingForSearch && targetStatus === 'success' && <p>{targets.length}件</p>}
+          <div className="targets-heading-actions">
+            {!isWaitingForSearch && targetStatus === 'success' && <p>{targets.length}件</p>}
+            <button className="add-target-button" type="button" onClick={openCreateModal}>＋ 推しを登録</button>
+          </div>
         </div>
+
+        {successMessage && <p className="target-success-message" role="status">{successMessage}</p>}
 
         <div className="target-search">
           <label htmlFor="target-keyword">名前で検索</label>
@@ -155,6 +183,14 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
           </ul>
         )}
       </section>
+
+      {isCreateModalOpen && (
+        <TargetCreateModal
+          onClose={() => setIsCreateModalOpen(false)}
+          onCreated={handleTargetCreated}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
     </main>
   )
 }
