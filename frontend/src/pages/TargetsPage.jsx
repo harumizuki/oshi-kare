@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { ApiError } from '../api/client'
 import { getTargets } from '../api/targets'
 import TargetCreateModal from '../components/TargetCreateModal'
+import TargetDeleteModal from '../components/TargetDeleteModal'
 
 function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpired }) {
   const [targets, setTargets] = useState([])
@@ -12,6 +13,7 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
   const [debouncedKeyword, setDebouncedKeyword] = useState('')
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false)
   const [editingTarget, setEditingTarget] = useState(null)
+  const [deletingTarget, setDeletingTarget] = useState(null)
   const [successMessage, setSuccessMessage] = useState('')
   const requestVersionRef = useRef(0)
   const normalizedKeyword = keyword.trim()
@@ -94,6 +96,19 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
     setDebouncedKeyword('')
     setEditingTarget(null)
     setSuccessMessage('変更を保存しました。')
+    setRetryCount((count) => count + 1)
+  }
+
+  const openDeleteModal = (target) => {
+    setSuccessMessage('')
+    setDeletingTarget(target)
+  }
+
+  const handleTargetDeleted = () => {
+    setKeyword('')
+    setDebouncedKeyword('')
+    setDeletingTarget(null)
+    setSuccessMessage('削除しました。')
     setRetryCount((count) => count + 1)
   }
 
@@ -195,6 +210,9 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
                   <button className="edit-target-button" type="button" onClick={() => openEditModal(target)} aria-label={`${target.name}を編集`}>
                     編集
                   </button>
+                  <button className="delete-target-button" type="button" onClick={() => openDeleteModal(target)} aria-label={`${target.name}の削除内容を確認`}>
+                    削除
+                  </button>
                 </div>
               </li>
             ))}
@@ -215,6 +233,16 @@ function TargetsPage({ user, onLogout, isLoggingOut, logoutError, onSessionExpir
           target={editingTarget}
           onClose={() => setEditingTarget(null)}
           onUpdated={handleTargetUpdated}
+          onSessionExpired={onSessionExpired}
+        />
+      )}
+
+      {deletingTarget && (
+        <TargetDeleteModal
+          key={deletingTarget.id}
+          target={deletingTarget}
+          onClose={() => setDeletingTarget(null)}
+          onDeleted={handleTargetDeleted}
           onSessionExpired={onSessionExpired}
         />
       )}

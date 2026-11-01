@@ -29,3 +29,17 @@ export async function updateTarget(targetId, target) {
     requiresCsrf: true,
   })
 }
+
+export function getTargetDeletionPreview(targetId, signal) {
+  return request(`/api/targets/${targetId}/deletion-preview`, { signal })
+}
+
+export async function deleteTarget(targetId, deletion) {
+  await initializeCsrfProtection()
+
+  return request(`/api/targets/${targetId}`, {
+    method: 'DELETE',
+    body: deletion,
+    requiresCsrf: true,
+  })
+}
