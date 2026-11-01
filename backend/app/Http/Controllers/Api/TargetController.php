@@ -6,9 +6,11 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\IndexTargetRequest;
 use App\Http\Requests\StoreTargetRequest;
 use App\Http\Requests\UpdateTargetRequest;
+use App\Http\Resources\TargetDeletionPreviewResource;
 use App\Http\Resources\TargetResource;
 use App\Models\Target;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\Request;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\Gate;
 use Symfony\Component\HttpFoundation\Response;
@@ -51,6 +53,22 @@ class TargetController extends Controller
         $target->load('category');
 
         return new TargetResource($target);
+    }
+
+    public function deletionPreview(Request $request, Target $target): TargetDeletionPreviewResource
+    {
+        Gate::authorize('delete', $target);
+
+        $schedules = $request->user()
+            ->schedules()
+            ->where('target_id', $target->id)
+            ->orderBy('starts_at')
+            ->orderBy('id')
+            ->get();
+
+        $target->setRelation('schedules', $schedules);
+
+        return new TargetDeletionPreviewResource($target);
     }
 
     public function update(UpdateTargetRequest $request, Target $target): TargetResource

@@ -3,6 +3,7 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Category;
+use App\Models\Schedule;
 use App\Models\Target;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -36,6 +37,7 @@ class TargetDestroyTest extends TestCase
         $user = User::factory()->create();
         $category = $this->createCategory();
         $target = $this->createTarget($user, $category);
+        $schedule = $this->createSchedule($user, $target);
         $this->actingAs($user);
 
         // Act
@@ -47,6 +49,10 @@ class TargetDestroyTest extends TestCase
             ->assertContent('');
         $this->assertDatabaseMissing('targets', [
             'id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => null,
         ]);
     }
 
@@ -84,6 +90,22 @@ class TargetDestroyTest extends TestCase
             'category_id' => $category->id,
             'name' => 'テストターゲット',
             'target_type' => '個人',
+            'memo' => null,
+        ]);
+    }
+
+    private function createSchedule(User $user, Target $target): Schedule
+    {
+        return Schedule::query()->forceCreate([
+            'user_id' => $user->id,
+            'target_id' => $target->id,
+            'title' => 'テスト予定',
+            'schedule_type' => '個人予定',
+            'is_all_day' => true,
+            'starts_at' => '2026-11-01 00:00:00',
+            'ends_at' => '2026-11-01 00:00:00',
+            'location' => null,
+            'url' => null,
             'memo' => null,
         ]);
     }
