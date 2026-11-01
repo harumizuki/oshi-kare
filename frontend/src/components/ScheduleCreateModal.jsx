@@ -4,6 +4,8 @@ import { getTargets } from '../api/targets'
 import { ApiError } from '../api/client'
 import {
   buildSchedulePayload,
+  CUSTOM_SCHEDULE_TYPE_OPTION,
+  isPresetScheduleType,
   mapScheduleApiErrors,
   scheduleToFormValues,
   scheduleTypeOptions,
@@ -12,6 +14,7 @@ import {
 function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated, onUpdated, onSessionExpired }) {
   const titleInputRef = useRef(null)
   const isEditing = schedule !== null
+  const initialScheduleType = schedule?.schedule_type ?? '通常予定'
   const [values, setValues] = useState(() => (
     schedule
       ? scheduleToFormValues(schedule)
@@ -28,6 +31,11 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
           url: '',
           memo: '',
         }
+  ))
+  const [scheduleTypeChoice, setScheduleTypeChoice] = useState(() => (
+    isPresetScheduleType(initialScheduleType)
+      ? initialScheduleType
+      : CUSTOM_SCHEDULE_TYPE_OPTION
   ))
   const [targets, setTargets] = useState([])
   const [targetStatus, setTargetStatus] = useState('loading')
@@ -83,6 +91,14 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
     setValues((current) => ({ ...current, [name]: value }))
     setFieldErrors((current) => ({ ...current, [name]: undefined }))
     setSubmitError('')
+  }
+
+  const updateScheduleTypeChoice = (nextChoice) => {
+    setScheduleTypeChoice(nextChoice)
+    updateValue(
+      'scheduleType',
+      nextChoice === CUSTOM_SCHEDULE_TYPE_OPTION ? '' : nextChoice,
+    )
   }
 
   const handleSubmit = async (event) => {
@@ -143,12 +159,23 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
             <FieldError message={fieldErrors.title} />
 
             <label htmlFor="schedule-type">予定の種類 <span>必須</span></label>
-            <select id="schedule-type" value={values.scheduleType} onChange={(event) => updateValue('scheduleType', event.target.value)} required>
-              {!scheduleTypeOptions.some((option) => option.value === values.scheduleType) && (
-                <option value={values.scheduleType}>{values.scheduleType}</option>
-              )}
+            <select id="schedule-type" value={scheduleTypeChoice} onChange={(event) => updateScheduleTypeChoice(event.target.value)} required>
               {scheduleTypeOptions.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+              <option value={CUSTOM_SCHEDULE_TYPE_OPTION}>その他（自由入力）</option>
             </select>
+            {scheduleTypeChoice === CUSTOM_SCHEDULE_TYPE_OPTION && (
+              <>
+                <label htmlFor="custom-schedule-type">予定の種類を入力 <span>必須</span></label>
+                <input
+                  id="custom-schedule-type"
+                  value={values.scheduleType}
+                  onChange={(event) => updateValue('scheduleType', event.target.value)}
+                  maxLength="100"
+                  placeholder="例：試合、発売日、コンサート"
+                  required
+                />
+              </>
+            )}
             <FieldError message={fieldErrors.scheduleType} />
 
             <label className="all-day-toggle">

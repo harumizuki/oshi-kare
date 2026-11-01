@@ -5,6 +5,12 @@ export const scheduleTypeOptions = [
   { value: 'ライブ配信', label: 'ライブ配信' },
 ]
 
+export const CUSTOM_SCHEDULE_TYPE_OPTION = '__oshi_kare_custom_schedule_type__'
+
+export function isPresetScheduleType(scheduleType) {
+  return scheduleTypeOptions.some((option) => option.value === scheduleType)
+}
+
 function toJapanIso(date, time) {
   return `${date}T${time}:00+09:00`
 }
@@ -73,9 +79,14 @@ export function scheduleToFormValues(schedule) {
 export function buildSchedulePayload(values) {
   const errors = {}
   const title = values.title.trim()
+  const scheduleType = (values.scheduleType ?? '').trim()
 
   if (!title) errors.title = 'タイトルを入力してください。'
-  if (!values.scheduleType) errors.scheduleType = '予定の種類を選択してください。'
+  if (!scheduleType) {
+    errors.scheduleType = '予定の種類を入力してください。'
+  } else if (scheduleType.length > 100) {
+    errors.scheduleType = '予定の種類は100文字以内で入力してください。'
+  }
   if (!values.startDate) errors.startDate = '開始日を入力してください。'
 
   let startsAt = values.startDate
@@ -116,7 +127,7 @@ export function buildSchedulePayload(values) {
     payload: {
       target_id: values.targetId ? Number(values.targetId) : null,
       title,
-      schedule_type: values.scheduleType,
+      schedule_type: scheduleType,
       is_all_day: values.isAllDay,
       starts_at: startsAt,
       ends_at: endsAt,
