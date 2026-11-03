@@ -88,6 +88,41 @@ class ScheduleShowTest extends TestCase
             ->assertJsonPath('data.target', null);
     }
 
+    public function test_owner_gets_target_from_pivot_when_legacy_target_differs(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $legacyTarget = $this->createTarget($user, $category, '旧カラムのターゲット');
+        $pivotTarget = $this->createTarget($user, $category, 'Pivotのターゲット');
+        $schedule = $this->createSchedule($user, [
+            'target_id' => $legacyTarget->id,
+        ]);
+        $schedule->targets()->sync([$pivotTarget->id]);
+        $this->actingAs($user);
+
+        // Act
+        $response = $this->getJson("/api/schedules/{$schedule->id}");
+
+        // Assert
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.target.id', $pivotTarget->id)
+            ->assertJsonPath('data.target.name', 'Pivotのターゲット');
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $legacyTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $pivotTarget->id,
+        ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $legacyTarget->id,
+        ]);
+    }
+
     public function test_user_cannot_get_another_users_schedule(): void
     {
         // Arrange
@@ -125,12 +160,15 @@ class ScheduleShowTest extends TestCase
         ]);
     }
 
-    private function createTarget(User $user, Category $category): Target
-    {
+    private function createTarget(
+        User $user,
+        Category $category,
+        string $name = 'テストターゲット'
+    ): Target {
         return Target::query()->forceCreate([
             'user_id' => $user->id,
             'category_id' => $category->id,
-            'name' => 'テストターゲット',
+            'name' => $name,
             'target_type' => '個人',
             'memo' => null,
         ]);
@@ -141,7 +179,7 @@ class ScheduleShowTest extends TestCase
      */
     private function createSchedule(User $user, array $attributes = []): Schedule
     {
-        return Schedule::query()->forceCreate(array_merge([
+        $schedule = Schedule::query()->forceCreate(array_merge([
             'user_id' => $user->id,
             'target_id' => null,
             'title' => 'テスト予定',
@@ -153,5 +191,11 @@ class ScheduleShowTest extends TestCase
             'url' => 'https://example.com/schedule',
             'memo' => 'テストメモ',
         ], $attributes));
+
+        if ($schedule->target_id !== null) {
+            $schedule->targets()->sync([$schedule->target_id]);
+        }
+
+        return $schedule;
     }
 }

@@ -81,6 +81,45 @@ class ScheduleIndexTest extends TestCase
             ->assertJsonMissing(['id' => $otherSchedule->id]);
     }
 
+    public function test_shared_schedule_returns_first_pivot_target_without_changing_relationships(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($user, $category, '先頭ターゲット');
+        $secondTarget = $this->createTarget($user, $category, '2番目のターゲット');
+        $schedule = $this->createSchedule($user, [
+            'target_id' => $secondTarget->id,
+            'title' => '共有予定',
+        ]);
+        $schedule->targets()->sync([$secondTarget->id, $firstTarget->id]);
+        $this->actingAs($user);
+
+        // Act
+        $response = $this->getJson('/api/schedules?start=2026-10-01&end=2026-10-31');
+
+        // Assert
+        $response
+            ->assertOk()
+            ->assertJsonCount(1, 'data')
+            ->assertJsonPath('data.0.id', $schedule->id)
+            ->assertJsonPath('data.0.target.id', $firstTarget->id)
+            ->assertJsonPath('data.0.target.name', '先頭ターゲット');
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $secondTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $firstTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $secondTarget->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 2);
+    }
+
     public function test_timed_schedules_overlapping_period_are_returned_and_outside_are_excluded(): void
     {
         // Arrange
@@ -242,12 +281,15 @@ class ScheduleIndexTest extends TestCase
         ]);
     }
 
-    private function createTarget(User $user, Category $category): Target
-    {
+    private function createTarget(
+        User $user,
+        Category $category,
+        string $name = 'テストターゲット'
+    ): Target {
         return Target::query()->forceCreate([
             'user_id' => $user->id,
             'category_id' => $category->id,
-            'name' => 'テストターゲット',
+            'name' => $name,
             'target_type' => '個人',
             'memo' => null,
         ]);
@@ -258,7 +300,7 @@ class ScheduleIndexTest extends TestCase
      */
     private function createSchedule(User $user, array $attributes = []): Schedule
     {
-        return Schedule::query()->forceCreate(array_merge([
+        $schedule = Schedule::query()->forceCreate(array_merge([
             'user_id' => $user->id,
             'target_id' => null,
             'title' => 'テスト予定',
@@ -270,5 +312,11 @@ class ScheduleIndexTest extends TestCase
             'url' => null,
             'memo' => null,
         ], $attributes));
+
+        if ($schedule->target_id !== null) {
+            $schedule->targets()->sync([$schedule->target_id]);
+        }
+
+        return $schedule;
     }
 }

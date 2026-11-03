@@ -33,7 +33,7 @@ class ScheduleController extends Controller
 
         $schedules = $request->user()
             ->schedules()
-            ->with('target')
+            ->with('targets')
             ->where(function (Builder $query) use (
                 $allDayStart,
                 $allDayEnd,
@@ -93,7 +93,7 @@ class ScheduleController extends Controller
             return $schedule;
         });
 
-        $schedule->load('target');
+        $schedule->load('targets');
 
         return (new ScheduleResource($schedule))
             ->response()
@@ -104,7 +104,7 @@ class ScheduleController extends Controller
     {
         Gate::authorize('view', $schedule);
 
-        $schedule->load('target');
+        $schedule->load('targets');
 
         return new ScheduleResource($schedule);
     }
@@ -151,7 +151,7 @@ class ScheduleController extends Controller
             return $lockedSchedule;
         });
 
-        $schedule->load('target');
+        $schedule->load('targets');
 
         return new ScheduleResource($schedule);
     }

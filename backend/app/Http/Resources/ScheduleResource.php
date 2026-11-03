@@ -30,13 +30,14 @@ class ScheduleResource extends JsonResource
             'location' => $this->location,
             'url' => $this->url,
             'memo' => $this->memo,
-            'target' => $this->whenLoaded(
-                'target',
-                fn () => $this->target === null ? null : [
-                    'id' => $this->target->id,
-                    'name' => $this->target->name,
-                ]
-            ),
+            'target' => $this->whenLoaded('targets', function () {
+                $target = $this->targets->sortBy('id')->first();
+
+                return $target === null ? null : [
+                    'id' => $target->id,
+                    'name' => $target->name,
+                ];
+            }),
         ];
     }
 }
