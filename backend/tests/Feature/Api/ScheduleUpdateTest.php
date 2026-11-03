@@ -194,12 +194,59 @@ class ScheduleUpdateTest extends TestCase
         }
     }
 
+    public function test_legacy_update_rejects_shared_schedule_without_changing_data(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($user, $category);
+        $secondTarget = $this->createTarget($user, $category);
+        $schedule = $this->createSchedule($user, ['target_id' => $firstTarget->id]);
+        $schedule->targets()->sync([$firstTarget->id, $secondTarget->id]);
+        $this->actingAs($user);
+
+        // Act
+        $response = $this->patchJson(
+            "/api/schedules/{$schedule->id}",
+            array_merge($this->timedPayload(), ['target_id' => $firstTarget->id])
+        );
+
+        // Assert
+        $response
+            ->assertConflict()
+            ->assertExactJson([
+                'message' => '複数の登録情報に紐づく予定は、現在の編集画面から更新できません。',
+                'code' => 'shared_schedule_requires_target_ids',
+            ]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'user_id' => $user->id,
+            'target_id' => $firstTarget->id,
+            'title' => '更新前のテスト予定',
+            'starts_at' => '2026-10-05 12:00:00',
+            'ends_at' => '2026-10-05 14:00:00',
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $firstTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $secondTarget->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 2);
+    }
+
     public function test_user_cannot_update_another_users_schedule(): void
     {
         // Arrange
         $owner = User::factory()->create();
         $otherUser = User::factory()->create();
-        $schedule = $this->createSchedule($owner);
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($owner, $category);
+        $secondTarget = $this->createTarget($owner, $category);
+        $schedule = $this->createSchedule($owner, ['target_id' => $firstTarget->id]);
+        $schedule->targets()->sync([$firstTarget->id, $secondTarget->id]);
         $this->actingAs($otherUser);
 
         // Act
@@ -210,7 +257,21 @@ class ScheduleUpdateTest extends TestCase
 
         // Assert
         $response->assertForbidden();
-        $this->assertScheduleIsUnchanged($schedule, $owner);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'user_id' => $owner->id,
+            'target_id' => $firstTarget->id,
+            'title' => '更新前のテスト予定',
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $firstTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $secondTarget->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 2);
     }
 
     public function test_nonexistent_schedule_returns_not_found(): void

@@ -10,6 +10,7 @@ use App\Http\Resources\ScheduleResource;
 use App\Models\Schedule;
 use Carbon\CarbonImmutable;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Exceptions\HttpResponseException;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Resources\Json\AnonymousResourceCollection;
 use Illuminate\Support\Facades\DB;
@@ -124,9 +125,30 @@ class ScheduleController extends Controller
                 : null;
         }
 
-        DB::transaction(function () use ($schedule, $data) {
-            $schedule->update($data);
-            $this->syncLegacyTarget($schedule);
+        $schedule = DB::transaction(function () use ($request, $schedule, $data) {
+            $lockedSchedule = $request->user()
+                ->schedules()
+                ->whereKey($schedule->getKey())
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            $currentTargetIds = DB::table('schedule_target')
+                ->where('schedule_id', $lockedSchedule->id)
+                ->orderBy('target_id')
+                ->lockForUpdate()
+                ->pluck('target_id');
+
+            if ($currentTargetIds->count() > 1) {
+                throw new HttpResponseException(response()->json([
+                    'message' => '複数の登録情報に紐づく予定は、現在の編集画面から更新できません。',
+                    'code' => 'shared_schedule_requires_target_ids',
+                ], Response::HTTP_CONFLICT));
+            }
+
+            $lockedSchedule->update($data);
+            $this->syncLegacyTarget($lockedSchedule);
+
+            return $lockedSchedule;
         });
 
         $schedule->load('target');
