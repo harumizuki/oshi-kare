@@ -8,6 +8,7 @@ use App\Models\Schedule;
 use App\Models\Target;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\DB;
 use Symfony\Component\HttpFoundation\Response;
 use Tests\TestCase;
 
@@ -25,6 +26,7 @@ class TargetDestroyTest extends TestCase
         $response = $this->deleteJson("/api/targets/{$target->id}", [
             'deletion_mode' => DestroyTargetRequest::MODE_KEEP_ALL,
             'expected_schedule_ids' => [],
+            'expected_schedule_state' => str_repeat('0', 64),
         ]);
 
         // Assert
@@ -32,30 +34,36 @@ class TargetDestroyTest extends TestCase
         $this->assertDatabaseHas('targets', ['id' => $target->id]);
     }
 
-    public function test_delete_all_mode_deletes_target_and_all_owned_related_schedules(): void
+    public function test_delete_all_mode_deletes_single_schedules_and_detaches_shared_schedules(): void
     {
         // Arrange
         $user = User::factory()->create();
         $otherUser = User::factory()->create();
-        $target = $this->createTarget($user);
-        $otherTarget = $this->createTarget($user);
-        $firstSchedule = $this->createSchedule($user, $target, ['title' => '削除予定1']);
-        $secondSchedule = $this->createSchedule($user, $target, ['title' => '削除予定2']);
+        $target = $this->createTarget($user, '削除対象');
+        $otherTarget = $this->createTarget($user, '共有先');
+        $singleSchedule = $this->createSchedule($user, $target, ['title' => '単独予定']);
+        $sharedSchedule = $this->createSchedule($user, $target, ['title' => '共有予定']);
+        $sharedSchedule->targets()->attach($otherTarget->id);
         $unrelatedSchedule = $this->createSchedule($user, $otherTarget, ['title' => '無関係な予定']);
         $otherUsersSchedule = $this->createSchedule($otherUser, $target, ['title' => '他ユーザーの予定']);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_DELETE_ALL);
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_DELETE_ALL,
-            'expected_schedule_ids' => [$secondSchedule->id, $firstSchedule->id],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response->assertNoContent()->assertContent('');
         $this->assertDatabaseMissing('targets', ['id' => $target->id]);
-        $this->assertDatabaseMissing('schedules', ['id' => $firstSchedule->id]);
-        $this->assertDatabaseMissing('schedules', ['id' => $secondSchedule->id]);
+        $this->assertDatabaseMissing('schedules', ['id' => $singleSchedule->id]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $sharedSchedule->id,
+            'target_id' => $otherTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $sharedSchedule->id,
+            'target_id' => $otherTarget->id,
+        ]);
         $this->assertDatabaseHas('schedules', [
             'id' => $unrelatedSchedule->id,
             'target_id' => $otherTarget->id,
@@ -65,61 +73,76 @@ class TargetDestroyTest extends TestCase
             'user_id' => $otherUser->id,
             'target_id' => null,
         ]);
-        $this->assertDatabaseHas('schedule_target', [
-            'schedule_id' => $unrelatedSchedule->id,
-            'target_id' => $otherTarget->id,
-        ]);
         $this->assertDatabaseMissing('schedule_target', [
             'target_id' => $target->id,
         ]);
     }
 
-    public function test_keep_all_mode_deletes_only_target_and_keeps_all_schedules(): void
+    public function test_keep_all_mode_keeps_single_and_shared_schedules(): void
     {
         // Arrange
         $user = User::factory()->create();
-        $target = $this->createTarget($user);
-        $firstSchedule = $this->createSchedule($user, $target);
-        $secondSchedule = $this->createSchedule($user, $target);
+        $target = $this->createTarget($user, '削除対象');
+        $firstRemainingTarget = $this->createTarget($user, '共有先1');
+        $secondRemainingTarget = $this->createTarget($user, '共有先2');
+        $singleSchedule = $this->createSchedule($user, $target, ['title' => '単独予定']);
+        $sharedSchedule = $this->createSchedule($user, $target, ['title' => '共有予定']);
+        $sharedSchedule->targets()->attach([
+            $secondRemainingTarget->id,
+            $firstRemainingTarget->id,
+        ]);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_KEEP_ALL);
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_KEEP_ALL,
-            'expected_schedule_ids' => [$firstSchedule->id, $secondSchedule->id],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response->assertNoContent();
         $this->assertDatabaseMissing('targets', ['id' => $target->id]);
         $this->assertDatabaseHas('schedules', [
-            'id' => $firstSchedule->id,
+            'id' => $singleSchedule->id,
             'target_id' => null,
         ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'schedule_id' => $singleSchedule->id,
+        ]);
         $this->assertDatabaseHas('schedules', [
-            'id' => $secondSchedule->id,
-            'target_id' => null,
+            'id' => $sharedSchedule->id,
+            'target_id' => $firstRemainingTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $sharedSchedule->id,
+            'target_id' => $firstRemainingTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $sharedSchedule->id,
+            'target_id' => $secondRemainingTarget->id,
         ]);
         $this->assertDatabaseMissing('schedule_target', [
             'target_id' => $target->id,
         ]);
     }
 
-    public function test_delete_selected_mode_deletes_only_selected_schedules(): void
+    public function test_delete_selected_mode_deletes_selected_single_and_keeps_other_schedules(): void
     {
         // Arrange
         $user = User::factory()->create();
-        $target = $this->createTarget($user);
-        $selectedSchedule = $this->createSchedule($user, $target);
-        $keptSchedule = $this->createSchedule($user, $target);
+        $target = $this->createTarget($user, '削除対象');
+        $otherTarget = $this->createTarget($user, '共有先');
+        $selectedSchedule = $this->createSchedule($user, $target, ['title' => '選択した単独予定']);
+        $keptSchedule = $this->createSchedule($user, $target, ['title' => '残す単独予定']);
+        $sharedSchedule = $this->createSchedule($user, $target, ['title' => '共有予定']);
+        $sharedSchedule->targets()->attach($otherTarget->id);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData(
+            $target,
+            DestroyTargetRequest::MODE_DELETE_SELECTED,
+            [$selectedSchedule->id]
+        );
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_DELETE_SELECTED,
-            'expected_schedule_ids' => [$selectedSchedule->id, $keptSchedule->id],
-            'selected_schedule_ids' => [$selectedSchedule->id],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response->assertNoContent();
@@ -128,6 +151,14 @@ class TargetDestroyTest extends TestCase
         $this->assertDatabaseHas('schedules', [
             'id' => $keptSchedule->id,
             'target_id' => null,
+        ]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $sharedSchedule->id,
+            'target_id' => $otherTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $sharedSchedule->id,
+            'target_id' => $otherTarget->id,
         ]);
         $this->assertDatabaseMissing('schedule_target', [
             'target_id' => $target->id,
@@ -141,13 +172,14 @@ class TargetDestroyTest extends TestCase
         $target = $this->createTarget($user);
         $schedule = $this->createSchedule($user, $target);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData(
+            $target,
+            DestroyTargetRequest::MODE_DELETE_SELECTED,
+            []
+        );
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_DELETE_SELECTED,
-            'expected_schedule_ids' => [$schedule->id],
-            'selected_schedule_ids' => [],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response->assertNoContent();
@@ -157,7 +189,44 @@ class TargetDestroyTest extends TestCase
             'target_id' => null,
         ]);
         $this->assertDatabaseMissing('schedule_target', [
+            'schedule_id' => $schedule->id,
+        ]);
+    }
+
+    public function test_delete_selected_mode_rejects_shared_schedule_id(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $target = $this->createTarget($user, '削除対象');
+        $otherTarget = $this->createTarget($user, '共有先');
+        $sharedSchedule = $this->createSchedule($user, $target);
+        $sharedSchedule->targets()->attach($otherTarget->id);
+        $this->actingAs($user);
+        $deletionData = $this->makeDeletionData(
+            $target,
+            DestroyTargetRequest::MODE_DELETE_SELECTED,
+            [$sharedSchedule->id]
+        );
+
+        // Act
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
+
+        // Assert
+        $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('selected_schedule_ids');
+        $this->assertDatabaseHas('targets', ['id' => $target->id]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $sharedSchedule->id,
             'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $sharedSchedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $sharedSchedule->id,
+            'target_id' => $otherTarget->id,
         ]);
     }
 
@@ -166,24 +235,22 @@ class TargetDestroyTest extends TestCase
         // Arrange
         $user = User::factory()->create();
         $target = $this->createTarget($user);
-        $schedule = $this->createSchedule($user, $target);
+        $this->createSchedule($user, $target);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData(
+            $target,
+            DestroyTargetRequest::MODE_DELETE_SELECTED
+        );
+        unset($deletionData['selected_schedule_ids']);
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_DELETE_SELECTED,
-            'expected_schedule_ids' => [$schedule->id],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response
             ->assertUnprocessable()
             ->assertJsonValidationErrors('selected_schedule_ids');
         $this->assertDatabaseHas('targets', ['id' => $target->id]);
-        $this->assertDatabaseHas('schedules', [
-            'id' => $schedule->id,
-            'target_id' => $target->id,
-        ]);
     }
 
     public function test_target_without_schedules_can_be_deleted(): void
@@ -192,19 +259,17 @@ class TargetDestroyTest extends TestCase
         $user = User::factory()->create();
         $target = $this->createTarget($user);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_DELETE_ALL);
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_DELETE_ALL,
-            'expected_schedule_ids' => [],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response->assertNoContent();
         $this->assertDatabaseMissing('targets', ['id' => $target->id]);
     }
 
-    public function test_deletion_mode_and_expected_schedule_ids_are_required(): void
+    public function test_deletion_mode_expected_ids_and_state_are_required(): void
     {
         // Arrange
         $user = User::factory()->create();
@@ -217,7 +282,11 @@ class TargetDestroyTest extends TestCase
         // Assert
         $response
             ->assertUnprocessable()
-            ->assertJsonValidationErrors(['deletion_mode', 'expected_schedule_ids']);
+            ->assertJsonValidationErrors([
+                'deletion_mode',
+                'expected_schedule_ids',
+                'expected_schedule_state',
+            ]);
         $this->assertDatabaseHas('targets', ['id' => $target->id]);
     }
 
@@ -227,15 +296,35 @@ class TargetDestroyTest extends TestCase
         $user = User::factory()->create();
         $target = $this->createTarget($user);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_KEEP_ALL);
+        $deletionData['deletion_mode'] = 'invalid_mode';
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => 'invalid_mode',
-            'expected_schedule_ids' => [],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response->assertUnprocessable()->assertJsonValidationErrors('deletion_mode');
+        $this->assertDatabaseHas('targets', ['id' => $target->id]);
+    }
+
+    public function test_invalid_expected_schedule_state_is_rejected(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $target = $this->createTarget($user);
+        $this->actingAs($user);
+
+        // Act
+        $response = $this->deleteJson("/api/targets/{$target->id}", [
+            'deletion_mode' => DestroyTargetRequest::MODE_KEEP_ALL,
+            'expected_schedule_ids' => [],
+            'expected_schedule_state' => 'invalid',
+        ]);
+
+        // Assert
+        $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('expected_schedule_state');
         $this->assertDatabaseHas('targets', ['id' => $target->id]);
     }
 
@@ -251,6 +340,7 @@ class TargetDestroyTest extends TestCase
         $response = $this->deleteJson("/api/targets/{$target->id}", [
             'deletion_mode' => DestroyTargetRequest::MODE_KEEP_ALL,
             'expected_schedule_ids' => [],
+            'expected_schedule_state' => str_repeat('0', 64),
         ]);
 
         // Assert
@@ -267,13 +357,14 @@ class TargetDestroyTest extends TestCase
         $relatedSchedule = $this->createSchedule($user, $target);
         $unrelatedSchedule = $this->createSchedule($user, $otherTarget);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData(
+            $target,
+            DestroyTargetRequest::MODE_DELETE_SELECTED,
+            [$unrelatedSchedule->id]
+        );
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_DELETE_SELECTED,
-            'expected_schedule_ids' => [$relatedSchedule->id],
-            'selected_schedule_ids' => [$unrelatedSchedule->id],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response
@@ -299,13 +390,14 @@ class TargetDestroyTest extends TestCase
         $relatedSchedule = $this->createSchedule($user, $target);
         $otherUsersSchedule = $this->createSchedule($otherUser, $target);
         $this->actingAs($user);
+        $deletionData = $this->makeDeletionData(
+            $target,
+            DestroyTargetRequest::MODE_DELETE_SELECTED,
+            [$otherUsersSchedule->id]
+        );
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_DELETE_SELECTED,
-            'expected_schedule_ids' => [$relatedSchedule->id],
-            'selected_schedule_ids' => [$otherUsersSchedule->id],
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response
@@ -322,37 +414,26 @@ class TargetDestroyTest extends TestCase
         ]);
     }
 
-    public function test_changed_related_schedule_state_rejects_entire_deletion(): void
+    public function test_added_related_schedule_state_rejects_entire_deletion(): void
     {
         // Arrange
         $user = User::factory()->create();
         $target = $this->createTarget($user);
         $existingSchedule = $this->createSchedule($user, $target);
         $this->actingAs($user);
-        $preview = $this->getJson("/api/targets/{$target->id}/deletion-preview")
-            ->assertOk();
-        $expectedScheduleIds = collect($preview->json('data.schedules'))->pluck('id')->all();
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_DELETE_ALL);
         $newSchedule = $this->createSchedule($user, $target);
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_DELETE_ALL,
-            'expected_schedule_ids' => $expectedScheduleIds,
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response
             ->assertStatus(Response::HTTP_CONFLICT)
             ->assertJsonPath('code', 'target_schedule_state_changed');
         $this->assertDatabaseHas('targets', ['id' => $target->id]);
-        $this->assertDatabaseHas('schedules', [
-            'id' => $existingSchedule->id,
-            'target_id' => $target->id,
-        ]);
-        $this->assertDatabaseHas('schedules', [
-            'id' => $newSchedule->id,
-            'target_id' => $target->id,
-        ]);
+        $this->assertDatabaseHas('schedules', ['id' => $existingSchedule->id]);
+        $this->assertDatabaseHas('schedules', ['id' => $newSchedule->id]);
     }
 
     public function test_detached_related_schedule_state_rejects_entire_deletion(): void
@@ -362,16 +443,11 @@ class TargetDestroyTest extends TestCase
         $target = $this->createTarget($user);
         $schedule = $this->createSchedule($user, $target);
         $this->actingAs($user);
-        $preview = $this->getJson("/api/targets/{$target->id}/deletion-preview")
-            ->assertOk();
-        $expectedScheduleIds = collect($preview->json('data.schedules'))->pluck('id')->all();
-        $schedule->update(['target_id' => null]);
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_KEEP_ALL);
+        $schedule->targets()->detach($target->id);
 
         // Act
-        $response = $this->deleteJson("/api/targets/{$target->id}", [
-            'deletion_mode' => DestroyTargetRequest::MODE_KEEP_ALL,
-            'expected_schedule_ids' => $expectedScheduleIds,
-        ]);
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
 
         // Assert
         $response
@@ -380,7 +456,122 @@ class TargetDestroyTest extends TestCase
         $this->assertDatabaseHas('targets', ['id' => $target->id]);
         $this->assertDatabaseHas('schedules', [
             'id' => $schedule->id,
-            'target_id' => null,
+            'target_id' => $target->id,
+        ]);
+    }
+
+    public function test_changed_target_composition_rejects_entire_deletion(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $target = $this->createTarget($user, '削除対象');
+        $otherTarget = $this->createTarget($user, '共有先');
+        $schedule = $this->createSchedule($user, $target);
+        $this->actingAs($user);
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_DELETE_ALL);
+        $schedule->targets()->attach($otherTarget->id);
+
+        // Act
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
+
+        // Assert
+        $response
+            ->assertStatus(Response::HTTP_CONFLICT)
+            ->assertJsonPath('code', 'target_schedule_state_changed');
+        $this->assertDatabaseHas('targets', ['id' => $target->id]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $otherTarget->id,
+        ]);
+    }
+
+    public function test_target_owner_mismatch_rejects_entire_deletion(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $target = $this->createTarget($user, '削除対象');
+        $otherUsersTarget = $this->createTarget($otherUser, '他ユーザーのTarget');
+        $schedule = $this->createSchedule($user, $target);
+        $schedule->targets()->attach($otherUsersTarget->id);
+        $this->actingAs($user);
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_KEEP_ALL);
+
+        // Act
+        $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
+
+        // Assert
+        $response
+            ->assertStatus(Response::HTTP_CONFLICT)
+            ->assertJsonPath('code', 'target_schedule_state_changed');
+        $this->assertDatabaseHas('targets', ['id' => $target->id]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $otherUsersTarget->id,
+        ]);
+    }
+
+    public function test_failure_rolls_back_schedule_pivot_and_target_changes(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $target = $this->createTarget($user, '削除対象');
+        $otherTarget = $this->createTarget($user, '共有先');
+        $singleSchedule = $this->createSchedule($user, $target, ['title' => '単独予定']);
+        $sharedSchedule = $this->createSchedule($user, $target, ['title' => '共有予定']);
+        $sharedSchedule->targets()->attach($otherTarget->id);
+        $this->actingAs($user);
+        $deletionData = $this->makeDeletionData($target, DestroyTargetRequest::MODE_DELETE_ALL);
+        DB::unprepared(<<<SQL
+            CREATE TRIGGER fail_target_delete
+            BEFORE DELETE ON targets
+            WHEN OLD.id = {$target->id}
+            BEGIN
+                SELECT RAISE(FAIL, 'forced target delete failure');
+            END;
+            SQL);
+
+        // Act
+        try {
+            $response = $this->deleteJson("/api/targets/{$target->id}", $deletionData);
+        } finally {
+            DB::unprepared('DROP TRIGGER IF EXISTS fail_target_delete');
+        }
+
+        // Assert
+        $response->assertStatus(Response::HTTP_INTERNAL_SERVER_ERROR);
+        $this->assertDatabaseHas('targets', ['id' => $target->id]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $singleSchedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $sharedSchedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $singleSchedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $sharedSchedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $sharedSchedule->id,
+            'target_id' => $otherTarget->id,
         ]);
     }
 
@@ -394,13 +585,40 @@ class TargetDestroyTest extends TestCase
         $response = $this->deleteJson('/api/targets/999999', [
             'deletion_mode' => DestroyTargetRequest::MODE_KEEP_ALL,
             'expected_schedule_ids' => [],
+            'expected_schedule_state' => str_repeat('0', 64),
         ]);
 
         // Assert
         $response->assertNotFound();
     }
 
-    private function createTarget(User $user): Target
+    /**
+     * @param  array<int, int>  $selectedScheduleIds
+     * @return array<string, mixed>
+     */
+    private function makeDeletionData(
+        Target $target,
+        string $deletionMode,
+        array $selectedScheduleIds = []
+    ): array {
+        $preview = $this->getJson("/api/targets/{$target->id}/deletion-preview")
+            ->assertOk()
+            ->json('data');
+
+        $data = [
+            'deletion_mode' => $deletionMode,
+            'expected_schedule_ids' => collect($preview['schedules'])->pluck('id')->all(),
+            'expected_schedule_state' => $preview['expected_schedule_state'],
+        ];
+
+        if ($deletionMode === DestroyTargetRequest::MODE_DELETE_SELECTED) {
+            $data['selected_schedule_ids'] = $selectedScheduleIds;
+        }
+
+        return $data;
+    }
+
+    private function createTarget(User $user, string $name = 'テストターゲット'): Target
     {
         $category = Category::query()->first()
             ?? Category::query()->forceCreate([
@@ -410,7 +628,7 @@ class TargetDestroyTest extends TestCase
         return Target::query()->forceCreate([
             'user_id' => $user->id,
             'category_id' => $category->id,
-            'name' => 'テストターゲット',
+            'name' => $name,
             'target_type' => '個人',
             'memo' => null,
         ]);

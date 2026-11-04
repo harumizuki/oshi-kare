@@ -208,10 +208,13 @@ button:focus-visible { outline: 3px solid rgb(145 83 157 / 30%); outline-offset:
 .target-preview-empty { margin: 0; padding: 16px; border: 1px dashed #dfd4e1; border-radius: 12px; color: #777079; font-size: .82rem; text-align: center; }
 .target-preview-list { display: grid; max-height: 250px; gap: 8px; margin: 0; padding: 0; overflow-y: auto; list-style: none; }
 .target-preview-item { display: flex; align-items: flex-start; gap: 10px; padding: 12px; border: 1px solid #eee6ef; border-radius: 11px; background: #fff; }
+.target-preview-item.is-shared { background: #fbf8fc; }
 .target-preview-item > div { min-width: 0; }
 .target-preview-item p { margin: 0 0 4px; color: #847b86; font-size: .72rem; font-weight: 700; }
 .target-preview-item h4 { margin: 0; overflow-wrap: anywhere; font-size: .88rem; }
 .target-preview-item > div > span { display: inline-block; margin-top: 4px; color: #875293; font-size: .7rem; font-weight: 800; }
+.target-preview-item > div > .target-shared-badge { margin-left: 6px; padding: 3px 7px; border-radius: 999px; color: #6f5275; background: #eee5f0; }
+.target-preview-item > div > .target-shared-note { margin: 7px 0 0; color: #716675; font-size: .72rem; font-weight: 600; line-height: 1.55; }
 .target-schedule-checkbox { flex: 0 0 auto; padding-top: 2px; }
 .target-schedule-checkbox input { width: 18px; height: 18px; accent-color: #b13d50; cursor: pointer; }
 .target-delete-options { display: grid; gap: 8px; margin: 0; padding: 0; border: 0; }
@@ -225,12 +228,13 @@ button:focus-visible { outline: 3px solid rgb(145 83 157 / 30%); outline-offset:
 .target-delete-options:disabled { opacity: .55; }
 .target-deletion-summary { display: grid; gap: 10px; margin-top: 20px; padding: 15px; border: 1px solid #eadfeb; border-radius: 12px; background: #fcfafc; }
 .target-deletion-summary p { margin: 0; }
-.target-deletion-summary > p:not(.target-keep-note) { display: grid; gap: 3px; }
+.target-deletion-summary > p { display: grid; gap: 3px; }
 .target-deletion-summary > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
 .target-deletion-summary > div p { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px; border-radius: 9px; background: #fff; }
 .target-deletion-summary span { color: #7a727c; font-size: .74rem; font-weight: 700; }
 .target-deletion-summary strong { min-width: 0; overflow-wrap: anywhere; color: #403a42; font-size: .88rem; }
-.target-keep-note { padding-top: 10px; border-top: 1px solid #eadfeb; color: #6f6571; font-size: .76rem; line-height: 1.6; }
+.target-deletion-summary > .target-keep-notes { display: grid; grid-template-columns: 1fr; gap: 5px; padding-top: 10px; border-top: 1px solid #eadfeb; }
+.target-deletion-summary > .target-keep-notes p { display: block; padding: 0; color: #6f6571; background: transparent; font-size: .76rem; line-height: 1.6; }
 .target-final-confirmation { padding: 18px; border: 1px solid #edc7cd; border-radius: 14px; background: #fff7f8; }
 .target-final-confirmation > h3 { margin: 0 0 4px; color: #8d3040; font-size: 1rem; }
 .target-final-confirmation .target-deletion-summary { background: #fff; }

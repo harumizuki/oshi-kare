@@ -43,6 +43,12 @@ class DestroyTargetRequest extends FormRequest
             ],
             'expected_schedule_ids' => ['present', 'array'],
             'expected_schedule_ids.*' => ['integer', 'distinct'],
+            'expected_schedule_state' => [
+                'required',
+                'string',
+                'size:64',
+                'regex:/\A[a-f0-9]{64}\z/',
+            ],
             'selected_schedule_ids' => $deletesSelectedSchedules
                 ? ['present', 'array']
                 : ['prohibited'],

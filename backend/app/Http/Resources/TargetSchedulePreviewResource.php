@@ -27,6 +27,8 @@ class TargetSchedulePreviewResource extends JsonResource
                     ? $this->ends_at->toDateString()
                     : $this->ends_at->toIso8601String()),
             'is_all_day' => $this->is_all_day,
+            'is_shared' => (int) $this->targets_count >= 2,
+            'target_count' => (int) $this->targets_count,
         ];
     }
 }

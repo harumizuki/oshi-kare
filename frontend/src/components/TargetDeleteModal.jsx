@@ -164,13 +164,27 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
   }, [isFinalConfirmation, onClose])
 
   const schedules = preview?.schedules ?? []
-  const totalScheduleCount = schedules.length
+  const totalScheduleCount = preview?.schedule_count ?? schedules.length
+  const singleScheduleCount = preview?.single_schedule_count
+    ?? schedules.filter((schedule) => !schedule.is_shared).length
+  const sharedScheduleCount = preview?.shared_schedule_count
+    ?? schedules.filter((schedule) => schedule.is_shared).length
+  const singleScheduleIds = new Set(
+    schedules
+      .filter((schedule) => !schedule.is_shared)
+      .map((schedule) => schedule.id),
+  )
+  const selectedSingleScheduleIds = selectedScheduleIds
+    .filter((scheduleId) => singleScheduleIds.has(scheduleId))
   const deleteScheduleCount = deletionMode === DELETION_MODES.DELETE_ALL
-    ? totalScheduleCount
+    ? singleScheduleCount
     : deletionMode === DELETION_MODES.DELETE_SELECTED
-      ? selectedScheduleIds.length
+      ? selectedSingleScheduleIds.length
       : 0
   const keepScheduleCount = totalScheduleCount - deleteScheduleCount
+  const personalScheduleCount = deletionMode === DELETION_MODES.DELETE_ALL
+    ? 0
+    : singleScheduleCount - deleteScheduleCount
 
   const closeModal = () => {
     if (!isDeletingRef.current) onClose()
@@ -188,11 +202,13 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
     setDeleteError('')
   }
 
-  const toggleSchedule = (scheduleId) => {
+  const toggleSchedule = (schedule) => {
+    if (schedule.is_shared) return
+
     setSelectedScheduleIds((currentIds) => (
-      currentIds.includes(scheduleId)
-        ? currentIds.filter((id) => id !== scheduleId)
-        : [...currentIds, scheduleId]
+      currentIds.includes(schedule.id)
+        ? currentIds.filter((id) => id !== schedule.id)
+        : [...currentIds, schedule.id]
     ))
   }
 
@@ -217,10 +233,11 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
     const deletion = {
       deletion_mode: deletionMode,
       expected_schedule_ids: schedules.map((schedule) => schedule.id),
+      expected_schedule_state: preview.expected_schedule_state,
     }
 
     if (deletionMode === DELETION_MODES.DELETE_SELECTED) {
-      deletion.selected_schedule_ids = [...selectedScheduleIds].sort((a, b) => a - b)
+      deletion.selected_schedule_ids = [...selectedSingleScheduleIds].sort((a, b) => a - b)
     }
 
     try {
@@ -287,7 +304,9 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
                 <p>削除する登録情報</p>
                 <h3>{preview.target.name}</h3>
               </div>
-              <span>関連予定 {totalScheduleCount}件</span>
+              <span>
+                関連予定 {totalScheduleCount}件（単独 {singleScheduleCount}件・共有 {sharedScheduleCount}件）
+              </span>
             </div>
 
             {isPreviewStale && (
@@ -309,7 +328,10 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
                       checked={deletionMode === DELETION_MODES.DELETE_ALL}
                       onChange={handleModeChange}
                     />
-                    <span><strong>A：関連予定をすべて削除</strong><small>登録情報と関連する予定をすべて削除します。</small></span>
+                    <span>
+                      <strong>A：関連予定をすべて削除</strong>
+                      <small>単独予定を削除します。共有予定は、他の登録情報との紐づけを残して保持します。</small>
+                    </span>
                   </label>
                   <label className={deletionMode === DELETION_MODES.KEEP_ALL ? 'is-selected' : undefined}>
                     <input
@@ -319,7 +341,10 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
                       checked={deletionMode === DELETION_MODES.KEEP_ALL}
                       onChange={handleModeChange}
                     />
-                    <span><strong>B：関連予定をすべて残す</strong><small>予定は個人予定として残ります。</small></span>
+                    <span>
+                      <strong>B：関連予定をすべて残す</strong>
+                      <small>単独予定は個人予定として残し、共有予定は他の登録情報との紐づけを残します。</small>
+                    </span>
                   </label>
                   <label className={deletionMode === DELETION_MODES.DELETE_SELECTED ? 'is-selected' : undefined}>
                     <input
@@ -329,7 +354,10 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
                       checked={deletionMode === DELETION_MODES.DELETE_SELECTED}
                       onChange={handleModeChange}
                     />
-                    <span><strong>C：削除する予定を選ぶ</strong><small>下の一覧でチェックした予定だけを削除します。</small></span>
+                    <span>
+                      <strong>C：削除する予定を選ぶ</strong>
+                      <small>単独予定から選んだものだけを削除します。共有予定は選択できません。</small>
+                    </span>
                   </label>
                 </fieldset>
 
@@ -359,19 +387,22 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
                             <h3>関連する予定</h3>
                             <span>
                               {deletionMode === DELETION_MODES.DELETE_SELECTED
-                                ? `${selectedScheduleIds.length}件選択中`
+                                ? `${selectedSingleScheduleIds.length}件選択中`
                                 : `${totalScheduleCount}件`}
                             </span>
                           </div>
                           <ul id="target-related-schedule-list" className="target-preview-list">
                             {schedules.map((schedule) => (
-                              <li key={schedule.id} className="target-preview-item">
-                                {deletionMode === DELETION_MODES.DELETE_SELECTED && (
+                              <li
+                                key={schedule.id}
+                                className={`target-preview-item${schedule.is_shared ? ' is-shared' : ''}`}
+                              >
+                                {deletionMode === DELETION_MODES.DELETE_SELECTED && !schedule.is_shared && (
                                   <label className="target-schedule-checkbox">
                                     <input
                                       type="checkbox"
                                       checked={selectedScheduleIds.includes(schedule.id)}
-                                      onChange={() => toggleSchedule(schedule.id)}
+                                      onChange={() => toggleSchedule(schedule)}
                                     />
                                     <span className="visually-hidden">{schedule.title}を削除対象にする</span>
                                   </label>
@@ -380,6 +411,18 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
                                   <p>{formatSchedulePeriod(schedule)}</p>
                                   <h4>{schedule.title}</h4>
                                   <span>{schedule.schedule_type}</span>
+                                  {schedule.is_shared && (
+                                    <>
+                                      <span className="target-shared-badge">
+                                        他の登録情報にも紐づく予定（{schedule.target_count}件）
+                                      </span>
+                                      {deletionMode === DELETION_MODES.DELETE_SELECTED && (
+                                        <p className="target-shared-note">
+                                          この予定は削除対象に選べません。対象との紐づけだけを外して保持します。
+                                        </p>
+                                      )}
+                                    </>
+                                  )}
                                 </div>
                               </li>
                             ))}
@@ -394,6 +437,8 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
                   targetName={preview.target.name}
                   deleteScheduleCount={deleteScheduleCount}
                   keepScheduleCount={keepScheduleCount}
+                  personalScheduleCount={personalScheduleCount}
+                  sharedScheduleCount={sharedScheduleCount}
                 />
 
                 {deleteError && !isPreviewStale && <p className="form-error" role="alert">{deleteError}</p>}
@@ -414,6 +459,8 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
                   targetName={preview.target.name}
                   deleteScheduleCount={deleteScheduleCount}
                   keepScheduleCount={keepScheduleCount}
+                  personalScheduleCount={personalScheduleCount}
+                  sharedScheduleCount={sharedScheduleCount}
                 />
                 <p className="target-irreversible-warning">
                   {deleteScheduleCount > 0
@@ -446,7 +493,13 @@ function TargetDeleteModal({ target, onClose, onDeleted, onSessionExpired }) {
   )
 }
 
-function DeletionSummary({ targetName, deleteScheduleCount, keepScheduleCount }) {
+function DeletionSummary({
+  targetName,
+  deleteScheduleCount,
+  keepScheduleCount,
+  personalScheduleCount,
+  sharedScheduleCount,
+}) {
   return (
     <div className="target-deletion-summary">
       <p><span>削除する登録情報</span><strong>{targetName}</strong></p>
@@ -454,8 +507,17 @@ function DeletionSummary({ targetName, deleteScheduleCount, keepScheduleCount })
         <p><span>削除する予定</span><strong>{deleteScheduleCount}件</strong></p>
         <p><span>残す予定</span><strong>{keepScheduleCount}件</strong></p>
       </div>
-      {keepScheduleCount > 0 && (
-        <p className="target-keep-note">残す予定は登録情報との紐づけが外れ、個人予定として表示されます。</p>
+      {(personalScheduleCount > 0 || sharedScheduleCount > 0) && (
+        <div className="target-keep-notes">
+          {personalScheduleCount > 0 && (
+            <p>単独予定{personalScheduleCount}件は紐づけを外し、個人予定として保持します。</p>
+          )}
+          {sharedScheduleCount > 0 && (
+            <p>
+              共有予定{sharedScheduleCount}件は、他の登録情報との紐づけを残して予定を保持します。
+            </p>
+          )}
+        </div>
       )}
     </div>
   )
