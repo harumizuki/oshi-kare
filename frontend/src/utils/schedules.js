@@ -35,6 +35,21 @@ function getScheduleIcon(scheduleType) {
   return '📌'
 }
 
+export function formatScheduleTargetNames(schedule) {
+  const targets = Array.isArray(schedule.targets)
+    ? schedule.targets
+    : schedule.target
+      ? [schedule.target]
+      : []
+
+  if (targets.length === 0) return '個人予定'
+
+  return [...targets]
+    .sort((first, second) => Number(first.id) - Number(second.id))
+    .map((target) => target.name)
+    .join('、')
+}
+
 export function adaptSchedule(schedule, rangeStart, rangeEnd) {
   const startDate = schedule.is_all_day
     ? schedule.starts_at

@@ -26,12 +26,13 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
           isAllDay: true,
           startTime: '09:00',
           endTime: '',
-          targetId: '',
+          targetIds: [],
           location: '',
           url: '',
           memo: '',
         }
   ))
+  const initialTargetIdsRef = useRef(values.targetIds)
   const [scheduleTypeChoice, setScheduleTypeChoice] = useState(() => (
     isPresetScheduleType(initialScheduleType)
       ? initialScheduleType
@@ -61,7 +62,20 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
     setTargetStatus('loading')
     getTargets(controller.signal)
       .then((response) => {
-        setTargets(response.data)
+        const fetchedTargets = response.data
+        const fetchedTargetIds = new Set(
+          fetchedTargets.map((target) => String(target.id)),
+        )
+        const hasMissingTarget = initialTargetIdsRef.current
+          .some((targetId) => !fetchedTargetIds.has(targetId))
+
+        setTargets(fetchedTargets)
+
+        if ((isEditing && !Array.isArray(schedule.targets)) || hasMissingTarget) {
+          setTargetStatus('inconsistent')
+          return
+        }
+
         setTargetStatus('success')
       })
       .catch((error) => {
@@ -76,7 +90,7 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
       })
 
     return () => controller.abort()
-  }, [onSessionExpired, targetRetryCount])
+  }, [isEditing, onSessionExpired, schedule, targetRetryCount])
 
   useEffect(() => {
     const handleKeyDown = (event) => {
@@ -101,9 +115,28 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
     )
   }
 
+  const updateTargetSelection = (targetId, isSelected) => {
+    setValues((current) => ({
+      ...current,
+      targetIds: isSelected
+        ? [...new Set([...current.targetIds, targetId])]
+        : current.targetIds.filter((currentTargetId) => currentTargetId !== targetId),
+    }))
+    setFieldErrors((current) => ({ ...current, targetIds: undefined }))
+    setSubmitError('')
+  }
+
   const handleSubmit = async (event) => {
     event.preventDefault()
     if (isSaving) return
+
+    if (targetStatus !== 'success') {
+      setFieldErrors((current) => ({
+        ...current,
+        targetIds: '対象の情報を確認できるまで保存できません。再試行してください。',
+      }))
+      return
+    }
 
     const { errors, payload } = buildSchedulePayload(values)
     setFieldErrors(errors)
@@ -211,19 +244,59 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
               </div>
             )}
 
-            <label htmlFor="schedule-target">対象</label>
-            <select id="schedule-target" value={values.targetId} onChange={(event) => updateValue('targetId', event.target.value)}>
-              <option value="">個人予定</option>
-              {targets.map((target) => <option key={target.id} value={target.id}>{target.name}</option>)}
-            </select>
+            <div className="schedule-target-selector" role="group" aria-labelledby="schedule-target-label">
+              <div className="schedule-target-heading">
+                <p id="schedule-target-label">対象</p>
+                <span>{values.targetIds.length > 0 ? `${values.targetIds.length}件選択中` : '個人予定'}</span>
+              </div>
+
+              {targetStatus === 'success' && targets.length > 0 && (
+                <div className="schedule-target-options">
+                  {targets.map((target) => {
+                    const targetId = String(target.id)
+
+                    return (
+                      <label className="schedule-target-option" key={target.id}>
+                        <input
+                          type="checkbox"
+                          checked={values.targetIds.includes(targetId)}
+                          onChange={(event) => updateTargetSelection(targetId, event.target.checked)}
+                        />
+                        <span>{target.name}</span>
+                      </label>
+                    )
+                  })}
+                </div>
+              )}
+
+              {targetStatus === 'success' && targets.length === 0 && (
+                <p className="field-note">登録済みの対象がないため、個人予定として登録されます。</p>
+              )}
+
+              {targetStatus === 'success' && values.targetIds.length > 0 && (
+                <button
+                  className="clear-target-selection"
+                  type="button"
+                  onClick={() => updateValue('targetIds', [])}
+                >
+                  すべて解除して個人予定にする
+                </button>
+              )}
+            </div>
             {targetStatus === 'loading' && <p className="field-note">登録済みの推しを読み込んでいます…</p>}
             {targetStatus === 'error' && (
               <div className="target-load-error">
-                <p>推しを取得できませんでした。個人予定は登録できます。</p>
+                <p>対象を取得できませんでした。選択状態を保持したまま保存を停止しています。</p>
                 <button type="button" onClick={() => setTargetRetryCount((count) => count + 1)}>再試行</button>
               </div>
             )}
-            <FieldError message={fieldErrors.targetId} />
+            {targetStatus === 'inconsistent' && (
+              <div className="target-load-error">
+                <p>予定の関連付けと現在の対象一覧が一致しません。保存せず、再読み込みしてください。</p>
+                <button type="button" onClick={() => setTargetRetryCount((count) => count + 1)}>再試行</button>
+              </div>
+            )}
+            <FieldError message={fieldErrors.targetIds} />
 
             <label htmlFor="schedule-location">場所</label>
             <input id="schedule-location" value={values.location} onChange={(event) => updateValue('location', event.target.value)} maxLength="255" />
@@ -242,7 +315,7 @@ function ScheduleCreateModal({ initialDate, schedule = null, onClose, onCreated,
 
           <div className="modal-actions">
             <button className="secondary-button" type="button" onClick={onClose} disabled={isSaving}>キャンセル</button>
-            <button className="primary-button" type="submit" disabled={isSaving}>{isSaving ? '保存中…' : isEditing ? '変更を保存' : '保存する'}</button>
+            <button className="primary-button" type="submit" disabled={isSaving || targetStatus !== 'success'}>{isSaving ? '保存中…' : isEditing ? '変更を保存' : '保存する'}</button>
           </div>
         </form>
       </section>

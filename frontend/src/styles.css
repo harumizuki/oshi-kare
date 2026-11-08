@@ -78,6 +78,7 @@ button:focus-visible { outline: 3px solid rgb(145 83 157 / 30%); outline-offset:
 .schedule-meta { display: flex; flex-wrap: wrap; gap: 6px 12px; color: #8a818c; font-size: .73rem; font-weight: 700; }
 .schedule-content h3 { margin: 5px 0 3px; overflow-wrap: anywhere; font-size: .98rem; }
 .schedule-content p { margin: 0; color: #746d77; font-size: .8rem; }
+.schedule-content .schedule-target-names { overflow-wrap: anywhere; line-height: 1.5; }
 .empty-state { display: grid; min-height: 260px; place-items: center; align-content: center; padding: 28px; border: 1px dashed #dfd4e1; border-radius: 16px; color: #777079; text-align: center; }
 .empty-state > span { font-size: 2rem; filter: grayscale(.35); }
 .empty-state h3 { margin: 12px 0 4px; color: #484149; font-size: 1rem; }
@@ -127,6 +128,18 @@ button:focus-visible { outline: 3px solid rgb(145 83 157 / 30%); outline-offset:
 .form-row > div { display: grid; gap: 7px; }
 .field-error { margin: 0; color: #a9354a; font-size: .76rem; }
 .field-note { margin: 0; color: #777079; font-size: .75rem; }
+.schedule-target-selector { display: grid; gap: 8px; margin-top: 7px; }
+.schedule-target-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.schedule-target-heading p { margin: 0; color: #554e57; font-size: .82rem; font-weight: 800; }
+.schedule-target-heading span { color: #746d77; font-size: .75rem; font-weight: 700; }
+.schedule-target-options { display: grid; max-height: 190px; overflow-y: auto; border: 1px solid #dcd1de; border-radius: 10px; background: #fff; }
+.schedule-form .schedule-target-option { display: flex; min-height: 44px; align-items: center; gap: 10px; margin: 0; padding: 9px 12px; border-bottom: 1px solid #eee6ef; cursor: pointer; }
+.schedule-form .schedule-target-option:last-child { border-bottom: 0; }
+.schedule-target-option:hover { background: #fbf7fc; }
+.schedule-target-option input { flex: 0 0 auto; width: 18px; height: 18px; accent-color: #774681; }
+.schedule-target-option span { min-width: 0; overflow-wrap: anywhere; color: #403a42; font-size: .86rem; font-weight: 600; }
+.clear-target-selection { justify-self: start; padding: 6px 9px; border: 1px solid #d8c8db; border-radius: 8px; color: #704a78; background: #fff; font-size: .73rem; font-weight: 700; cursor: pointer; }
+.clear-target-selection:hover { background: #f8f2f9; }
 .target-load-error { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .target-load-error p { margin: 0; color: #a45a3c; font-size: .75rem; }
 .target-load-error button { padding: 5px 9px; border: 1px solid #d8c8db; border-radius: 7px; color: #704a78; background: #fff; font-size: .72rem; font-weight: 700; cursor: pointer; }

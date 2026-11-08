@@ -1,4 +1,5 @@
 import { formatDateLabel } from '../utils/date'
+import { formatScheduleTargetNames } from '../utils/schedules'
 
 function ScheduleList({ schedules, isDateSelected, onSelectSchedule }) {
   if (schedules.length === 0) {
@@ -26,7 +27,7 @@ function ScheduleList({ schedules, isDateSelected, onSelectSchedule }) {
                 <span>{schedule.time ?? '終日'}</span>
               </div>
               <h3>{schedule.title}</h3>
-              <p>{schedule.target?.name ?? '個人予定'}</p>
+              <p className="schedule-target-names">{formatScheduleTargetNames(schedule)}</p>
             </div>
           </button>
         </li>

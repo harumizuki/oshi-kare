@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { ApiError } from '../api/client'
 import { deleteSchedule, getSchedule } from '../api/schedules'
+import { formatScheduleTargetNames } from '../utils/schedules'
 
 const tokyoDateTimeFormatter = new Intl.DateTimeFormat('ja-JP', {
   timeZone: 'Asia/Tokyo',
@@ -166,7 +167,7 @@ function ScheduleDetailModal({ scheduleId, onClose, onDeleted, onEdit, onSession
               <DetailItem label="予定の種類" value={schedule.schedule_type} />
               <DetailItem label="日時" value={formatPeriod(schedule)} />
               <DetailItem label="終日" value={schedule.is_all_day ? 'はい' : 'いいえ'} />
-              <DetailItem label="対象" value={schedule.target?.name ?? '個人予定'} />
+              <DetailItem label="対象" value={formatScheduleTargetNames(schedule)} />
               <DetailItem label="場所" value={schedule.location || '未設定'} />
               <div className="detail-item">
                 <dt>URL</dt>

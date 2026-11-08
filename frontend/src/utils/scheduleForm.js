@@ -42,6 +42,12 @@ function getTokyoDateTimeParts(value) {
 }
 
 export function scheduleToFormValues(schedule) {
+  const targetIds = Array.isArray(schedule.targets)
+    ? schedule.targets.map((target) => String(target.id))
+    : schedule.target?.id
+      ? [String(schedule.target.id)]
+      : []
+
   if (schedule.is_all_day) {
     return {
       title: schedule.title,
@@ -51,7 +57,7 @@ export function scheduleToFormValues(schedule) {
       isAllDay: true,
       startTime: '09:00',
       endTime: '',
-      targetId: schedule.target?.id ? String(schedule.target.id) : '',
+      targetIds,
       location: schedule.location ?? '',
       url: schedule.url ?? '',
       memo: schedule.memo ?? '',
@@ -69,7 +75,7 @@ export function scheduleToFormValues(schedule) {
     isAllDay: false,
     startTime: start.time,
     endTime: end.time,
-    targetId: schedule.target?.id ? String(schedule.target.id) : '',
+    targetIds,
     location: schedule.location ?? '',
     url: schedule.url ?? '',
     memo: schedule.memo ?? '',
@@ -125,7 +131,7 @@ export function buildSchedulePayload(values) {
   return {
     errors: {},
     payload: {
-      target_id: values.targetId ? Number(values.targetId) : null,
+      target_ids: values.targetIds.map(Number),
       title,
       schedule_type: scheduleType,
       is_all_day: values.isAllDay,
@@ -139,8 +145,13 @@ export function buildSchedulePayload(values) {
 }
 
 export function mapScheduleApiErrors(apiErrors = {}) {
+  const targetItemErrorKey = Object.keys(apiErrors)
+    .find((key) => key.startsWith('target_ids.'))
+
   return {
-    targetId: apiErrors.target_id?.[0],
+    targetIds: apiErrors.target_ids?.[0]
+      ?? apiErrors[targetItemErrorKey]?.[0]
+      ?? apiErrors.target_id?.[0],
     title: apiErrors.title?.[0],
     scheduleType: apiErrors.schedule_type?.[0],
     startDate: apiErrors.starts_at?.[0],
