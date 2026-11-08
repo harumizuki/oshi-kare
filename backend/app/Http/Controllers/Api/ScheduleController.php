@@ -72,6 +72,16 @@ class ScheduleController extends Controller
     public function store(StoreScheduleRequest $request): JsonResponse
     {
         $data = $request->validated();
+        $targetIds = array_key_exists('target_ids', $data)
+            ? collect($data['target_ids'])
+                ->map(fn ($targetId) => (int) $targetId)
+                ->sort()
+                ->values()
+                ->all()
+            : (isset($data['target_id']) ? [(int) $data['target_id']] : []);
+
+        unset($data['target_ids']);
+        $data['target_id'] = $targetIds[0] ?? null;
 
         if ($data['is_all_day']) {
             $data['starts_at'] = CarbonImmutable::createFromFormat('!Y-m-d', $data['starts_at'], 'UTC');
@@ -83,12 +93,12 @@ class ScheduleController extends Controller
                 : null;
         }
 
-        $schedule = DB::transaction(function () use ($request, $data) {
+        $schedule = DB::transaction(function () use ($request, $data, $targetIds) {
             $schedule = $request->user()
                 ->schedules()
                 ->create($data);
 
-            $this->syncLegacyTarget($schedule);
+            $schedule->targets()->sync($targetIds);
 
             return $schedule;
         });
@@ -114,6 +124,20 @@ class ScheduleController extends Controller
         Gate::authorize('update', $schedule);
 
         $data = $request->validated();
+        $usesTargetIds = array_key_exists('target_ids', $data);
+        $targetIds = $usesTargetIds
+            ? collect($data['target_ids'])
+                ->map(fn ($targetId) => (int) $targetId)
+                ->sort()
+                ->values()
+                ->all()
+            : null;
+
+        unset($data['target_ids']);
+
+        if ($usesTargetIds) {
+            $data['target_id'] = $targetIds[0] ?? null;
+        }
 
         if ($data['is_all_day']) {
             $data['starts_at'] = CarbonImmutable::createFromFormat('!Y-m-d', $data['starts_at'], 'UTC');
@@ -125,7 +149,13 @@ class ScheduleController extends Controller
                 : null;
         }
 
-        $schedule = DB::transaction(function () use ($request, $schedule, $data) {
+        $schedule = DB::transaction(function () use (
+            $request,
+            $schedule,
+            $data,
+            $usesTargetIds,
+            $targetIds
+        ) {
             $lockedSchedule = $request->user()
                 ->schedules()
                 ->whereKey($schedule->getKey())
@@ -138,7 +168,7 @@ class ScheduleController extends Controller
                 ->lockForUpdate()
                 ->pluck('target_id');
 
-            if ($currentTargetIds->count() > 1) {
+            if (! $usesTargetIds && $currentTargetIds->count() > 1) {
                 throw new HttpResponseException(response()->json([
                     'message' => '複数の登録情報に紐づく予定は、現在の編集画面から更新できません。',
                     'code' => 'shared_schedule_requires_target_ids',
@@ -146,7 +176,12 @@ class ScheduleController extends Controller
             }
 
             $lockedSchedule->update($data);
-            $this->syncLegacyTarget($lockedSchedule);
+
+            if ($usesTargetIds) {
+                $lockedSchedule->targets()->sync($targetIds);
+            } else {
+                $this->syncLegacyTarget($lockedSchedule);
+            }
 
             return $lockedSchedule;
         });

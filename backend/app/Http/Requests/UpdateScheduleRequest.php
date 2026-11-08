@@ -6,6 +6,7 @@ use Illuminate\Contracts\Validation\ValidationRule;
 use Illuminate\Database\Query\Builder;
 use Illuminate\Foundation\Http\FormRequest;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\Validator;
 
 class UpdateScheduleRequest extends FormRequest
 {
@@ -28,8 +29,21 @@ class UpdateScheduleRequest extends FormRequest
 
         return [
             'target_id' => [
+                'bail',
                 'nullable',
                 'integer',
+                Rule::exists('targets', 'id')->where(
+                    fn (Builder $query) => $query->where('user_id', $this->user()->id)
+                ),
+            ],
+            'target_ids' => [
+                'bail',
+                'sometimes',
+                'array',
+            ],
+            'target_ids.*' => [
+                'integer',
+                'distinct',
                 Rule::exists('targets', 'id')->where(
                     fn (Builder $query) => $query->where('user_id', $this->user()->id)
                 ),
@@ -58,6 +72,31 @@ class UpdateScheduleRequest extends FormRequest
             'location' => ['nullable', 'string', 'max:255'],
             'url' => ['nullable', 'url', 'max:2048'],
             'memo' => ['nullable', 'string'],
+        ];
+    }
+
+    /**
+     * Get the "after" validation callables for the request.
+     *
+     * @return array<callable>
+     */
+    public function after(): array
+    {
+        return [
+            function (Validator $validator): void {
+                if (! $this->has('target_id') || ! $this->has('target_ids')) {
+                    return;
+                }
+
+                $validator->errors()->add(
+                    'target_id',
+                    'target_idとtarget_idsは同時に指定できません。'
+                );
+                $validator->errors()->add(
+                    'target_ids',
+                    'target_idとtarget_idsは同時に指定できません。'
+                );
+            },
         ];
     }
 }

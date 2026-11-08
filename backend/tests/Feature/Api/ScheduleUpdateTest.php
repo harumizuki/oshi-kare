@@ -66,6 +66,12 @@ class ScheduleUpdateTest extends TestCase
                         'id' => $target->id,
                         'name' => 'テストターゲット',
                     ],
+                    'targets' => [
+                        [
+                            'id' => $target->id,
+                            'name' => 'テストターゲット',
+                        ],
+                    ],
                 ],
             ]);
         $this->assertDatabaseHas('schedules', [
@@ -104,7 +110,8 @@ class ScheduleUpdateTest extends TestCase
             ->assertJsonPath('data.starts_at', '2026-10-10')
             ->assertJsonPath('data.ends_at', '2026-10-12')
             ->assertJsonPath('data.is_all_day', true)
-            ->assertJsonPath('data.target', null);
+            ->assertJsonPath('data.target', null)
+            ->assertJsonCount(0, 'data.targets');
         $this->assertDatabaseHas('schedules', [
             'id' => $schedule->id,
             'target_id' => null,
@@ -147,6 +154,152 @@ class ScheduleUpdateTest extends TestCase
         $this->assertDatabaseMissing('schedule_target', [
             'schedule_id' => $schedule->id,
             'target_id' => $oldTarget->id,
+        ]);
+    }
+
+    public function test_owner_can_change_single_target_to_multiple_targets(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($user, $category, 'ターゲット1');
+        $secondTarget = $this->createTarget($user, $category, 'ターゲット2');
+        $schedule = $this->createSchedule($user, ['target_id' => $firstTarget->id]);
+        $schedule->targets()->sync([$firstTarget->id]);
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+        $payload['target_ids'] = [$secondTarget->id, $firstTarget->id];
+
+        // Act
+        $response = $this->patchJson("/api/schedules/{$schedule->id}", $payload);
+
+        // Assert
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.target.id', $firstTarget->id)
+            ->assertJsonCount(2, 'data.targets')
+            ->assertJsonPath('data.targets.0.id', $firstTarget->id)
+            ->assertJsonPath('data.targets.0.name', 'ターゲット1')
+            ->assertJsonPath('data.targets.1.id', $secondTarget->id)
+            ->assertJsonPath('data.targets.1.name', 'ターゲット2');
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $firstTarget->id,
+            'title' => '更新後のテスト予定',
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $firstTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $secondTarget->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 2);
+    }
+
+    public function test_owner_can_change_multiple_targets_to_single_target(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($user, $category, 'ターゲット1');
+        $secondTarget = $this->createTarget($user, $category, 'ターゲット2');
+        $schedule = $this->createSchedule($user, ['target_id' => $firstTarget->id]);
+        $schedule->targets()->sync([$firstTarget->id, $secondTarget->id]);
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+        $payload['target_ids'] = [$secondTarget->id];
+
+        // Act
+        $response = $this->patchJson("/api/schedules/{$schedule->id}", $payload);
+
+        // Assert
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.title', '更新後のテスト予定')
+            ->assertJsonPath('data.target.id', $secondTarget->id)
+            ->assertJsonCount(1, 'data.targets')
+            ->assertJsonPath('data.targets.0.id', $secondTarget->id);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $secondTarget->id,
+            'title' => '更新後のテスト予定',
+        ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $firstTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $secondTarget->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 1);
+    }
+
+    public function test_owner_can_remove_all_targets_from_shared_schedule(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($user, $category, 'ターゲット1');
+        $secondTarget = $this->createTarget($user, $category, 'ターゲット2');
+        $schedule = $this->createSchedule($user, ['target_id' => $firstTarget->id]);
+        $schedule->targets()->sync([$firstTarget->id, $secondTarget->id]);
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+        $payload['target_ids'] = [];
+
+        // Act
+        $response = $this->patchJson("/api/schedules/{$schedule->id}", $payload);
+
+        // Assert
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.target', null)
+            ->assertJsonCount(0, 'data.targets');
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => null,
+            'title' => '更新後のテスト予定',
+        ]);
+        $this->assertDatabaseMissing('schedule_target', [
+            'schedule_id' => $schedule->id,
+        ]);
+    }
+
+    public function test_update_without_target_input_keeps_single_target(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $target = $this->createTarget($user, $category);
+        $schedule = $this->createSchedule($user, ['target_id' => $target->id]);
+        $schedule->targets()->sync([$target->id]);
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+
+        // Act
+        $response = $this->patchJson("/api/schedules/{$schedule->id}", $payload);
+
+        // Assert
+        $response
+            ->assertOk()
+            ->assertJsonPath('data.target.id', $target->id)
+            ->assertJsonCount(1, 'data.targets')
+            ->assertJsonPath('data.targets.0.id', $target->id);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $target->id,
+            'title' => '更新後のテスト予定',
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $target->id,
         ]);
     }
 
@@ -194,6 +347,55 @@ class ScheduleUpdateTest extends TestCase
         }
     }
 
+    public function test_multiple_target_update_rolls_back_when_pivot_sync_fails(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $oldTarget = $this->createTarget($user, $category, '更新前Target');
+        $firstNewTarget = $this->createTarget($user, $category, '更新後Target1');
+        $secondNewTarget = $this->createTarget($user, $category, '更新後Target2');
+        $schedule = $this->createSchedule($user, ['target_id' => $oldTarget->id]);
+        $schedule->targets()->sync([$oldTarget->id]);
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+        $payload['target_ids'] = [$firstNewTarget->id, $secondNewTarget->id];
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER fail_schedule_target_insert
+            BEFORE INSERT ON schedule_target
+            BEGIN
+                SELECT RAISE(ABORT, 'pivot sync failed');
+            END
+            SQL);
+        $this->withoutExceptionHandling();
+
+        // Act
+        try {
+            $this->patchJson("/api/schedules/{$schedule->id}", $payload);
+            $this->fail('Pivot同期に失敗した複数Target Schedule更新が成功しました。');
+        } catch (QueryException) {
+            // Assert
+            $this->assertDatabaseHas('schedules', [
+                'id' => $schedule->id,
+                'target_id' => $oldTarget->id,
+                'title' => '更新前のテスト予定',
+            ]);
+            $this->assertDatabaseHas('schedule_target', [
+                'schedule_id' => $schedule->id,
+                'target_id' => $oldTarget->id,
+            ]);
+            $this->assertDatabaseMissing('schedule_target', [
+                'schedule_id' => $schedule->id,
+                'target_id' => $firstNewTarget->id,
+            ]);
+            $this->assertDatabaseMissing('schedule_target', [
+                'schedule_id' => $schedule->id,
+                'target_id' => $secondNewTarget->id,
+            ]);
+        }
+    }
+
     public function test_legacy_update_rejects_shared_schedule_without_changing_data(): void
     {
         // Arrange
@@ -225,6 +427,45 @@ class ScheduleUpdateTest extends TestCase
             'title' => '更新前のテスト予定',
             'starts_at' => '2026-10-05 12:00:00',
             'ends_at' => '2026-10-05 14:00:00',
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $firstTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $secondTarget->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 2);
+    }
+
+    public function test_update_without_target_input_rejects_shared_schedule_without_changing_data(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($user, $category, 'ターゲット1');
+        $secondTarget = $this->createTarget($user, $category, 'ターゲット2');
+        $schedule = $this->createSchedule($user, ['target_id' => $firstTarget->id]);
+        $schedule->targets()->sync([$firstTarget->id, $secondTarget->id]);
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+
+        // Act
+        $response = $this->patchJson("/api/schedules/{$schedule->id}", $payload);
+
+        // Assert
+        $response
+            ->assertConflict()
+            ->assertExactJson([
+                'message' => '複数の登録情報に紐づく予定は、現在の編集画面から更新できません。',
+                'code' => 'shared_schedule_requires_target_ids',
+            ]);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $firstTarget->id,
+            'title' => '更新前のテスト予定',
         ]);
         $this->assertDatabaseHas('schedule_target', [
             'schedule_id' => $schedule->id,
@@ -342,6 +583,97 @@ class ScheduleUpdateTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('target_id');
         $this->assertScheduleIsUnchanged($schedule, $user);
+    }
+
+    public function test_invalid_target_ids_are_rejected_without_update(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $category = $this->createCategory();
+        $ownedTarget = $this->createTarget($user, $category, '所有Target');
+        $otherTarget = $this->createTarget($otherUser, $category, '他ユーザーTarget');
+        $schedule = $this->createSchedule($user, ['target_id' => $ownedTarget->id]);
+        $schedule->targets()->sync([$ownedTarget->id]);
+        $this->actingAs($user);
+
+        $duplicatePayload = $this->timedPayload();
+        unset($duplicatePayload['target_id']);
+        $duplicatePayload['target_ids'] = [$ownedTarget->id, $ownedTarget->id];
+
+        $otherUserPayload = $this->timedPayload();
+        unset($otherUserPayload['target_id']);
+        $otherUserPayload['target_ids'] = [$otherTarget->id];
+
+        $missingTargetPayload = $this->timedPayload();
+        unset($missingTargetPayload['target_id']);
+        $missingTargetPayload['target_ids'] = [$otherTarget->id + 999];
+
+        // Act
+        $duplicateResponse = $this->patchJson("/api/schedules/{$schedule->id}", $duplicatePayload);
+        $otherUserResponse = $this->patchJson("/api/schedules/{$schedule->id}", $otherUserPayload);
+        $missingTargetResponse = $this->patchJson("/api/schedules/{$schedule->id}", $missingTargetPayload);
+
+        // Assert
+        $duplicateResponse
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('target_ids.1');
+        $otherUserResponse
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('target_ids.0');
+        $missingTargetResponse
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('target_ids.0');
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $ownedTarget->id,
+            'title' => '更新前のテスト予定',
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $ownedTarget->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 1);
+    }
+
+    public function test_target_id_and_target_ids_cannot_be_sent_together_without_update(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $target = $this->createTarget($user, $category);
+        $schedule = $this->createSchedule($user, ['target_id' => $target->id]);
+        $schedule->targets()->sync([$target->id]);
+        $this->actingAs($user);
+
+        $targetInputs = [
+            ['target_id' => null, 'target_ids' => []],
+            ['target_id' => null, 'target_ids' => [$target->id]],
+            ['target_id' => $target->id, 'target_ids' => []],
+            ['target_id' => $target->id, 'target_ids' => [$target->id]],
+        ];
+
+        // Act
+        $responses = collect($targetInputs)
+            ->map(fn (array $targetInput) => $this->patchJson(
+                "/api/schedules/{$schedule->id}",
+                array_merge($this->timedPayload(), $targetInput)
+            ));
+
+        // Assert
+        $responses->each(fn ($response) => $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['target_id', 'target_ids']));
+        $this->assertDatabaseHas('schedules', [
+            'id' => $schedule->id,
+            'target_id' => $target->id,
+            'title' => '更新前のテスト予定',
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $schedule->id,
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 1);
     }
 
     public function test_title_and_schedule_type_are_required_without_update(): void
@@ -544,12 +876,15 @@ class ScheduleUpdateTest extends TestCase
         ]);
     }
 
-    private function createTarget(User $user, Category $category): Target
-    {
+    private function createTarget(
+        User $user,
+        Category $category,
+        string $name = 'テストターゲット'
+    ): Target {
         return Target::query()->forceCreate([
             'user_id' => $user->id,
             'category_id' => $category->id,
-            'name' => 'テストターゲット',
+            'name' => $name,
             'target_type' => '個人',
             'memo' => null,
         ]);

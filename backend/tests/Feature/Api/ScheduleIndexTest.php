@@ -76,8 +76,11 @@ class ScheduleIndexTest extends TestCase
             ->assertJsonPath('data.0.id', $withTarget->id)
             ->assertJsonPath('data.0.target.id', $target->id)
             ->assertJsonPath('data.0.target.name', 'テストターゲット')
+            ->assertJsonCount(1, 'data.0.targets')
+            ->assertJsonPath('data.0.targets.0.id', $target->id)
             ->assertJsonPath('data.1.id', $withoutTarget->id)
             ->assertJsonPath('data.1.target', null)
+            ->assertJsonCount(0, 'data.1.targets')
             ->assertJsonMissing(['id' => $otherSchedule->id]);
     }
 
@@ -104,7 +107,12 @@ class ScheduleIndexTest extends TestCase
             ->assertJsonCount(1, 'data')
             ->assertJsonPath('data.0.id', $schedule->id)
             ->assertJsonPath('data.0.target.id', $firstTarget->id)
-            ->assertJsonPath('data.0.target.name', '先頭ターゲット');
+            ->assertJsonPath('data.0.target.name', '先頭ターゲット')
+            ->assertJsonCount(2, 'data.0.targets')
+            ->assertJsonPath('data.0.targets.0.id', $firstTarget->id)
+            ->assertJsonPath('data.0.targets.0.name', '先頭ターゲット')
+            ->assertJsonPath('data.0.targets.1.id', $secondTarget->id)
+            ->assertJsonPath('data.0.targets.1.name', '2番目のターゲット');
         $this->assertDatabaseHas('schedules', [
             'id' => $schedule->id,
             'target_id' => $secondTarget->id,

@@ -49,7 +49,10 @@ class ScheduleStoreTest extends TestCase
             ->assertJsonPath('data.ends_at', '2026-09-25T14:00:00+00:00')
             ->assertJsonPath('data.is_all_day', false)
             ->assertJsonPath('data.target.id', $target->id)
-            ->assertJsonPath('data.target.name', 'テストターゲット');
+            ->assertJsonPath('data.target.name', 'テストターゲット')
+            ->assertJsonCount(1, 'data.targets')
+            ->assertJsonPath('data.targets.0.id', $target->id)
+            ->assertJsonPath('data.targets.0.name', 'テストターゲット');
 
         $this->assertDatabaseHas('schedules', [
             'user_id' => $user->id,
@@ -62,6 +65,102 @@ class ScheduleStoreTest extends TestCase
             'schedule_id' => $response->json('data.id'),
             'target_id' => $target->id,
         ]);
+    }
+
+    public function test_user_can_create_schedule_with_multiple_targets(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($user, $category, 'ターゲット1');
+        $secondTarget = $this->createTarget($user, $category, 'ターゲット2');
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+        $payload['target_ids'] = [$secondTarget->id, $firstTarget->id];
+
+        // Act
+        $response = $this->postJson('/api/schedules', $payload);
+
+        // Assert
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.target.id', $firstTarget->id)
+            ->assertJsonPath('data.target.name', 'ターゲット1')
+            ->assertJsonCount(2, 'data.targets')
+            ->assertJsonPath('data.targets.0.id', $firstTarget->id)
+            ->assertJsonPath('data.targets.0.name', 'ターゲット1')
+            ->assertJsonPath('data.targets.1.id', $secondTarget->id)
+            ->assertJsonPath('data.targets.1.name', 'ターゲット2');
+        $this->assertDatabaseHas('schedules', [
+            'id' => $response->json('data.id'),
+            'user_id' => $user->id,
+            'target_id' => $firstTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $response->json('data.id'),
+            'target_id' => $firstTarget->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $response->json('data.id'),
+            'target_id' => $secondTarget->id,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 2);
+    }
+
+    public function test_user_can_create_schedule_with_single_target_ids_entry(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $target = $this->createTarget($user, $category);
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+        $payload['target_ids'] = [$target->id];
+
+        // Act
+        $response = $this->postJson('/api/schedules', $payload);
+
+        // Assert
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.target.id', $target->id)
+            ->assertJsonCount(1, 'data.targets')
+            ->assertJsonPath('data.targets.0.id', $target->id);
+        $this->assertDatabaseHas('schedules', [
+            'id' => $response->json('data.id'),
+            'target_id' => $target->id,
+        ]);
+        $this->assertDatabaseHas('schedule_target', [
+            'schedule_id' => $response->json('data.id'),
+            'target_id' => $target->id,
+        ]);
+    }
+
+    public function test_empty_target_ids_creates_personal_schedule(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+        $payload['target_ids'] = [];
+
+        // Act
+        $response = $this->postJson('/api/schedules', $payload);
+
+        // Assert
+        $response
+            ->assertCreated()
+            ->assertJsonPath('data.target', null)
+            ->assertJsonCount(0, 'data.targets');
+        $this->assertDatabaseHas('schedules', [
+            'id' => $response->json('data.id'),
+            'user_id' => $user->id,
+            'target_id' => null,
+        ]);
+        $this->assertDatabaseCount('schedule_target', 0);
     }
 
     public function test_user_can_create_schedule_without_target_and_end_time(): void
@@ -77,6 +176,7 @@ class ScheduleStoreTest extends TestCase
         $response
             ->assertCreated()
             ->assertJsonPath('data.target', null)
+            ->assertJsonCount(0, 'data.targets')
             ->assertJsonPath('data.ends_at', null);
 
         $this->assertDatabaseHas('schedules', [
@@ -110,6 +210,37 @@ class ScheduleStoreTest extends TestCase
                 ['target_id' => $target->id]
             ));
             $this->fail('Pivot同期に失敗したSchedule登録が成功しました。');
+        } catch (QueryException) {
+            // Assert
+            $this->assertDatabaseCount('schedules', 0);
+            $this->assertDatabaseCount('schedule_target', 0);
+        }
+    }
+
+    public function test_multiple_target_creation_rolls_back_when_pivot_sync_fails(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $firstTarget = $this->createTarget($user, $category, 'ターゲット1');
+        $secondTarget = $this->createTarget($user, $category, 'ターゲット2');
+        $this->actingAs($user);
+        $payload = $this->timedPayload();
+        unset($payload['target_id']);
+        $payload['target_ids'] = [$firstTarget->id, $secondTarget->id];
+        DB::unprepared(<<<'SQL'
+            CREATE TRIGGER fail_schedule_target_insert
+            BEFORE INSERT ON schedule_target
+            BEGIN
+                SELECT RAISE(ABORT, 'pivot sync failed');
+            END
+            SQL);
+        $this->withoutExceptionHandling();
+
+        // Act
+        try {
+            $this->postJson('/api/schedules', $payload);
+            $this->fail('Pivot同期に失敗した複数Target Schedule登録が成功しました。');
         } catch (QueryException) {
             // Assert
             $this->assertDatabaseCount('schedules', 0);
@@ -170,6 +301,77 @@ class ScheduleStoreTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('target_id');
         $this->assertDatabaseCount('schedules', 0);
+    }
+
+    public function test_invalid_target_ids_are_rejected_without_creating_schedule(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $otherUser = User::factory()->create();
+        $category = $this->createCategory();
+        $ownedTarget = $this->createTarget($user, $category, '所有Target');
+        $otherTarget = $this->createTarget($otherUser, $category, '他ユーザーTarget');
+        $this->actingAs($user);
+
+        $duplicatePayload = $this->timedPayload();
+        unset($duplicatePayload['target_id']);
+        $duplicatePayload['target_ids'] = [$ownedTarget->id, $ownedTarget->id];
+
+        $otherUserPayload = $this->timedPayload();
+        unset($otherUserPayload['target_id']);
+        $otherUserPayload['target_ids'] = [$otherTarget->id];
+
+        $missingTargetPayload = $this->timedPayload();
+        unset($missingTargetPayload['target_id']);
+        $missingTargetPayload['target_ids'] = [$otherTarget->id + 999];
+
+        // Act
+        $duplicateResponse = $this->postJson('/api/schedules', $duplicatePayload);
+        $otherUserResponse = $this->postJson('/api/schedules', $otherUserPayload);
+        $missingTargetResponse = $this->postJson('/api/schedules', $missingTargetPayload);
+
+        // Assert
+        $duplicateResponse
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('target_ids.1');
+        $otherUserResponse
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('target_ids.0');
+        $missingTargetResponse
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors('target_ids.0');
+        $this->assertDatabaseCount('schedules', 0);
+        $this->assertDatabaseCount('schedule_target', 0);
+    }
+
+    public function test_target_id_and_target_ids_cannot_be_sent_together(): void
+    {
+        // Arrange
+        $user = User::factory()->create();
+        $category = $this->createCategory();
+        $target = $this->createTarget($user, $category);
+        $this->actingAs($user);
+
+        $targetInputs = [
+            ['target_id' => null, 'target_ids' => []],
+            ['target_id' => null, 'target_ids' => [$target->id]],
+            ['target_id' => $target->id, 'target_ids' => []],
+            ['target_id' => $target->id, 'target_ids' => [$target->id]],
+        ];
+
+        // Act
+        $responses = collect($targetInputs)
+            ->map(fn (array $targetInput) => $this->postJson(
+                '/api/schedules',
+                array_merge($this->timedPayload(), $targetInput)
+            ));
+
+        // Assert
+        $responses->each(fn ($response) => $response
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['target_id', 'target_ids']));
+        $this->assertDatabaseCount('schedules', 0);
+        $this->assertDatabaseCount('schedule_target', 0);
     }
 
     public function test_title_and_schedule_type_are_required(): void
@@ -383,12 +585,15 @@ class ScheduleStoreTest extends TestCase
         ]);
     }
 
-    private function createTarget(User $user, Category $category): Target
-    {
+    private function createTarget(
+        User $user,
+        Category $category,
+        string $name = 'テストターゲット'
+    ): Target {
         return Target::query()->forceCreate([
             'user_id' => $user->id,
             'category_id' => $category->id,
-            'name' => 'テストターゲット',
+            'name' => $name,
             'target_type' => '個人',
             'memo' => null,
         ]);

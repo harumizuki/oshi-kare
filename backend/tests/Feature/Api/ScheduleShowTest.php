@@ -58,6 +58,12 @@ class ScheduleShowTest extends TestCase
                         'id' => $target->id,
                         'name' => 'テストターゲット',
                     ],
+                    'targets' => [
+                        [
+                            'id' => $target->id,
+                            'name' => 'テストターゲット',
+                        ],
+                    ],
                 ],
             ]);
     }
@@ -85,7 +91,8 @@ class ScheduleShowTest extends TestCase
             ->assertJsonPath('data.starts_at', '2026-10-05')
             ->assertJsonPath('data.ends_at', '2026-10-06')
             ->assertJsonPath('data.is_all_day', true)
-            ->assertJsonPath('data.target', null);
+            ->assertJsonPath('data.target', null)
+            ->assertJsonCount(0, 'data.targets');
     }
 
     public function test_owner_gets_target_from_pivot_when_legacy_target_differs(): void
@@ -108,7 +115,10 @@ class ScheduleShowTest extends TestCase
         $response
             ->assertOk()
             ->assertJsonPath('data.target.id', $pivotTarget->id)
-            ->assertJsonPath('data.target.name', 'Pivotのターゲット');
+            ->assertJsonPath('data.target.name', 'Pivotのターゲット')
+            ->assertJsonCount(1, 'data.targets')
+            ->assertJsonPath('data.targets.0.id', $pivotTarget->id)
+            ->assertJsonPath('data.targets.0.name', 'Pivotのターゲット');
         $this->assertDatabaseHas('schedules', [
             'id' => $schedule->id,
             'target_id' => $legacyTarget->id,

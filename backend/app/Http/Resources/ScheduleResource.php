@@ -38,6 +38,14 @@ class ScheduleResource extends JsonResource
                     'name' => $target->name,
                 ];
             }),
+            'targets' => $this->whenLoaded('targets', fn () => $this->targets
+                ->sortBy('id')
+                ->values()
+                ->map(fn ($target) => [
+                    'id' => $target->id,
+                    'name' => $target->name,
+                ])
+                ->all()),
         ];
     }
 }
